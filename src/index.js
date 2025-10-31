@@ -2079,7 +2079,7 @@ class GameScene extends Phaser.Scene {
             // ФИКС: Рециклим платформу если она далеко внизу ИЛИ если она "мертвая" (balloon_dead) достаточно долго
             const isFarBehind = platform.y > this.player.y && Phaser.Math.Distance.Between(this.player.body.center.x, this.player.body.center.y, platform.body.center.x, platform.body.center.y) > CONSTS.RECYCLE_DISTANCE;
             const isDead = platform.texture.key === 'balloon_dead';
-            const isDeadLongEnough = isDead && platform.deadStartTime && this.time.now - platform.deadStartTime >= 1500; // НОВОЕ: Показываем dead 1.5 секунды
+            const isDeadLongEnough = isDead && platform.deadStartTime && this.time.now - platform.deadStartTime >= 500; // НОВОЕ: Показываем dead 1.5 секунды
             
             // НОВОЕ: Если земля появилась и игрок падает вниз - рециклим ВСЕ платформы выше игрока (включая синие!)
             const isAbovePlayerWhenFalling = this.groundAppeared && platform.y < this.player.y - 300; // Платформа выше игрока на 300px когда земля появилась
