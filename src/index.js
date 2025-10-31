@@ -1229,6 +1229,7 @@ class GameScene extends Phaser.Scene {
             // НОВОЕ: Настройка для нелопающихся платформ (синий цвет)
             if (platform.platformType === 'unbreakable') {
                 platform.setTexture('balloon_unbreakable');
+                platform.setScale(59/30, 110/73);
             }
             
             this.setupPlatformBody(platform); // ФИКС: Вызов функции
@@ -2129,6 +2130,7 @@ class GameScene extends Phaser.Scene {
             // НОВОЕ: Устанавливаем текстуру в зависимости от типа
             if (platform.platformType === 'unbreakable') {
                 platform.setTexture('balloon_unbreakable');
+                platform.setScale(59/30, 110/73);
             } else {
                 platform.setTexture('platform'); // normal и moving используют обычную зеленую текстуру
             }
