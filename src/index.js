@@ -883,9 +883,19 @@ class GameScene extends Phaser.Scene {
         // Реальная позиция оппонента придёт через первый opponentUpdate
         this.opponent = this.add.sprite(CONSTS.WIDTH / 2 + 100, startY, 'playerSprite');
         this.opponent.setScale(0.7);
-        this.opponent.setAlpha(0.5); // Полупрозрачный
-        this.opponent.setTint(0xFF6666); // Красноватый оттенок
+        this.opponent.setAlpha(0.6); // Немного увеличена прозрачность (было 0.5)
+        this.opponent.setTint(0x6666FF); // Синий оттенок вместо красного (легче отличить)
         this.opponent.setDepth(9); // Чуть ниже основного игрока
+        
+        // Добавляем пульсирующий эффект для лучшей видимости
+        this.tweens.add({
+            targets: this.opponent,
+            alpha: 0.4,
+            duration: 1000,
+            ease: 'Sine.easeInOut',
+            yoyo: true,
+            repeat: -1
+        });
         
         console.log('👻 Opponent ghost создан');
         console.log('   Ghost Y:', this.opponent.y, 'Player Y:', this.player.y);
@@ -894,7 +904,7 @@ class GameScene extends Phaser.Scene {
         // Добавляем имя оппонента над ним
         this.opponentNameText = this.add.text(0, -50, this.opponentData.username, {
             fontSize: '20px',
-            fill: '#FF6666',
+            fill: '#6666FF', // Синий цвет (соответствует tint)
             fontFamily: 'Arial',
             stroke: '#000000',
             strokeThickness: 3
@@ -1018,13 +1028,13 @@ class GameScene extends Phaser.Scene {
                 console.log('   Текущая позиция ghost:', this.opponent.x, this.opponent.y);
                 console.log('   Ghost visible:', this.opponent.visible);
                 
-                // Плавная интерполяция позиции
+                // Плавная интерполяция позиции (увеличена длительность для плавности)
                 this.tweens.add({
                     targets: this.opponent,
                     x: data.x,
                     y: data.y,
-                    duration: 100,
-                    ease: 'Linear'
+                    duration: 200, // Увеличено со 100ms до 200ms
+                    ease: 'Cubic.easeOut' // Более плавное замедление
                 });
             } else {
                 console.log('⚠️ Ghost не обновлен! opponent:', !!this.opponent, 'isAlive:', this.opponentData.isAlive);
