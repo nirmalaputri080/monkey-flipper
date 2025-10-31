@@ -881,7 +881,7 @@ class GameScene extends Phaser.Scene {
         // Создаем полупрозрачного ghost оппонента
         // ВАЖНО: Начальная позиция ВСЕГДА совпадает с позицией своего игрока
         // Реальная позиция оппонента придёт через первый opponentUpdate
-        this.opponent = this.add.sprite(CONSTS.WIDTH / 2 + 100, startY, 'playerSprite');
+        this.opponent = this.add.sprite(CONSTS.WIDTH / 2, startY, 'playerSprite');
         this.opponent.setScale(0.7);
         this.opponent.setAlpha(0.6); // Немного увеличена прозрачность (было 0.5)
         this.opponent.setTint(0x6666FF); // Синий оттенок вместо красного (легче отличить)
