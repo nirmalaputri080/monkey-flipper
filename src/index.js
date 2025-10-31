@@ -23,10 +23,18 @@ class SeededRandom {
 }
 
 // ==================== SERVER CONFIGURATION ====================
-// НОВОЕ: URL сервера для отправки счетов И Socket.IO
-const SERVER_URL = window.location.hostname === 'localhost' 
+// Socket.IO сервер (Render) - для 1v1 матчмейкинга
+const SOCKET_SERVER_URL = window.location.hostname === 'localhost' 
     ? 'http://localhost:3000'  // Для локальной разработки
-    : 'https://monkey-flipper-1v1-server-production.up.railway.app';  
+    : 'https://monkey-flipper.onrender.com';
+
+// API сервер (Vercel) - для сохранения счетов и лидерборда
+const API_SERVER_URL = window.location.hostname === 'localhost'
+    ? 'http://localhost:3000'  // Для локальной разработки
+    : window.location.origin;  // Используем тот же домен (Vercel)
+
+// Старая переменная для обратной совместимости (используется в Socket.IO коде)
+const SERVER_URL = SOCKET_SERVER_URL;  
 
 // НОВОЕ: Функция получения Telegram User ID
 function getTelegramUserId() {
@@ -74,7 +82,7 @@ async function saveScoreToServer(userId, username, score) {
     try {
         console.log(`📤 Отправка счета на сервер: userId=${userId}, score=${score}`);
         
-        const response = await fetch(`${SERVER_URL}/api/save-score`, {
+        const response = await fetch(`${API_SERVER_URL}/api/save-score`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

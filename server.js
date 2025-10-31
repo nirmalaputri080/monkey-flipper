@@ -322,6 +322,21 @@ io.on('connection', (socket) => {
 
 // ==================== REST API (опционально) ====================
 
+// Корневой маршрут - информация о сервере
+app.get('/', (req, res) => {
+    res.json({
+        name: 'Monkey Flipper 1v1 Server',
+        status: 'running',
+        version: '1.0.0',
+        socketIO: 'active',
+        endpoints: {
+            stats: '/api/stats',
+            health: '/api/health'
+        },
+        info: 'Socket.IO сервер для матчмейкинга и 1v1 игр'
+    });
+});
+
 // Статистика сервера
 app.get('/api/stats', (req, res) => {
     res.json({
