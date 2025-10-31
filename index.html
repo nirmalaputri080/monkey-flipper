@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>Monkey Flipper</title>
+    
+    <!-- НОВОЕ: Telegram Web App SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <!-- НОВОЕ: Инициализация Telegram Web App -->
+    <script>
+        // Инициализируем Telegram Web App сразу
+        if (window.Telegram && window.Telegram.WebApp) {
+            const tg = window.Telegram.WebApp;
+            
+            // ВАЖНО: Сначала расширяем окно
+            tg.expand();
+            
+            // Устанавливаем цвет заголовка
+            tg.setHeaderColor('#000000');
+            tg.setBackgroundColor('#000000');
+            
+            // Готов к использованию
+            tg.ready();
+            
+            // Отключаем вертикальные свайпы (чтобы не закрывалось)
+            tg.enableClosingConfirmation();
+            
+            // Скрываем кнопку "Назад" если есть
+            if (tg.BackButton) {
+                tg.BackButton.hide();
+            }
+            
+            console.log('✅ Telegram Web App инициализирован:', tg.initDataUnsafe);
+            console.log('📱 Viewport height:', tg.viewportHeight, 'Window height:', window.innerHeight);
+            
+            // ФИКС: Простая блокировка скролла для Telegram
+            window.addEventListener('load', function() {
+                // Принудительно скроллим наверх
+                window.scrollTo(0, 0);
+                
+                // Предотвращаем скролл
+                document.addEventListener('touchmove', function(e) {
+                    if (e.target.tagName !== 'CANVAS') {
+                        e.preventDefault();
+                    }
+                }, { passive: false });
+                
+                console.log('🔒 Скролл заблокирован');
+            });
+        } else {
+            console.warn('⚠️ Telegram Web App SDK не загружен');
+        }
+    </script>
+    
+    <!-- Socket.IO Client for 1v1 multiplayer -->
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.js"></script>
+    <!-- Альтернатива: minified для продакшена
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+    -->
+    <script src="./src/index.js"></script>
+    <style type="text/css">
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+            position: fixed; /* ФИКС: Фиксируем чтобы не было скролла в TG */
+        }
+        
+        body {
+            touch-action: none; /* ФИКС: Полностью блокируем touch жесты */
+        }
+        
+        #game-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            overflow: hidden;
+        }
+        
+        /* ФИКС: Canvas заполняет максимум доступного пространства */
+        canvas {
+            display: block;
+            background: #000;
+            max-width: 100%;
+            max-height: 100%;
+            width: auto !important;
+            height: auto !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+</body>
+</html>
