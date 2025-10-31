@@ -1218,6 +1218,11 @@ class GameScene extends Phaser.Scene {
             // НОВОЕ: Назначаем тип платформы
             platform.platformType = this.choosePlatformType();
             
+            // ФИКС: Первый шар всегда синий (нелопающийся)
+            if (i === 0) {
+                platform.platformType = 'unbreakable';
+            }
+            
             // НОВОЕ: Настройка для движущихся платформ
             if (platform.platformType === 'moving') {
                 platform.initialX = platform.x;
