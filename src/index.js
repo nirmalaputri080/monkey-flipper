@@ -708,6 +708,7 @@ class GameScene extends Phaser.Scene {
             this.opponentData = {
                 username: data.opponent.username,
                 id: data.opponent.id,
+                x: 0,
                 y: 0,
                 isAlive: true,
                 score: 0
@@ -952,12 +953,17 @@ class GameScene extends Phaser.Scene {
         
         // Получаем обновления позиции оппонента
         this.socket.on('opponentUpdate', (data) => {
-            console.log('📥 Получено обновление оппонента:', data);
+            console.log('📥 Получено обновление оппонента:', {
+                x: data.x,
+                y: data.y,
+                score: data.score,
+                isAlive: data.isAlive
+            });
             
             this.opponentData.x = data.x;
             this.opponentData.y = data.y;
             this.opponentData.isAlive = data.isAlive;
-            this.opponentData.score = data.score;
+            this.opponentData.score = data.score || 0;
             
             // Если оппонент умер - показываем это и не двигаем ghost
             if (!data.isAlive && this.opponent) {
@@ -1759,8 +1765,9 @@ class GameScene extends Phaser.Scene {
         }
         
         // Обновляем счет оппонента
-        if (this.opponentScoreText) {
-            this.opponentScoreText.setText(`Opponent: ${Math.floor(this.opponentData.score)}`);
+        if (this.gameMode === '1v1' && this.opponentScoreText && this.opponentData) {
+            const opponentScore = Math.floor(this.opponentData.score || 0);
+            this.opponentScoreText.setText(`Opponent: ${opponentScore}`);
         }
     }
     
