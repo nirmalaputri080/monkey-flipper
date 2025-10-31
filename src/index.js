@@ -1673,7 +1673,7 @@ class GameScene extends Phaser.Scene {
         // NEW RECORD (если есть) (поднимаем выше на 40px)
         let newRecordText = null;
         if (isNewRecord) {
-            newRecordText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 75, '★ НОВЫЙ РЕКОРД! ★', { 
+            newRecordText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 75, '★ New RECORD! ★', { 
                 fontSize: '20px', 
                 fill: '#FFD700', 
                 fontFamily: 'Arial Black' 
@@ -1681,14 +1681,14 @@ class GameScene extends Phaser.Scene {
         }
 
         // Текущий счёт (поднимаем выше на 40px)
-        const currentScoreText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 45, `Счёт: ${displayScore}`, { 
+        const currentScoreText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 45, `Score: ${displayScore}`, { 
             fontSize: '28px', 
             fill: '#FFFFFF', 
             fontFamily: 'Arial Black' 
         }).setOrigin(0.5).setScrollFactor(0).setDepth(15);
 
         // Лучший счёт (поднимаем выше на 40px)
-        const bestScoreText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 15, `Лучший: ${displayBest}`, { 
+        const bestScoreText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 15, `Best: ${displayBest}`, { 
             fontSize: '20px', 
             fill: '#00FF00', 
             fontFamily: 'Arial' 
@@ -1713,8 +1713,8 @@ class GameScene extends Phaser.Scene {
             .setScrollFactor(0)
             .setDepth(151) // ФИКС: Еще выше
             .setInteractive({ useHandCursor: true });
-        
-        const restartText = this.add.text(CONSTS.WIDTH / 2 - 80, CONSTS.HEIGHT / 2 + 67, 'Рестарт', { 
+
+        const restartText = this.add.text(CONSTS.WIDTH / 2 - 80, CONSTS.HEIGHT / 2 + 67, 'Restart', { 
             fontSize: '20px', 
             fill: '#FFF', 
             fontFamily: 'Arial Black' 
@@ -1738,8 +1738,8 @@ class GameScene extends Phaser.Scene {
             .setScrollFactor(0)
             .setDepth(151) // ФИКС: Еще выше
             .setInteractive({ useHandCursor: true });
-        
-        const menuText = this.add.text(CONSTS.WIDTH / 2 + 80, CONSTS.HEIGHT / 2 + 67, 'Меню', { 
+
+        const menuText = this.add.text(CONSTS.WIDTH / 2 + 80, CONSTS.HEIGHT / 2 + 67, 'Menu', { 
             fontSize: '20px', 
             fill: '#FFF', 
             fontFamily: 'Arial Black' 
