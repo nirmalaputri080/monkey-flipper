@@ -2147,6 +2147,7 @@ class GameScene extends Phaser.Scene {
                 platform.setScale(50/30, 100/73);
             } else {
                 platform.setTexture('platform'); // normal и moving используют обычную зеленую текстуру
+                platform.setScale(1, 1); // ФИКС: Сбрасываем масштаб для нормальных платформ
             }
             
             platform.isLanded = false;
