@@ -692,6 +692,8 @@ class GameScene extends Phaser.Scene {
         this.load.image('monkey_up', 'assets/monkey_up.png'); // НОВОЕ: Текстура подъёма (прыжка вверх)
         this.load.image('monkey_dumb', 'assets/monkey_dumb.png'); // НОВОЕ: Текстура удара головой
         this.load.image('monkey_fall_floor', 'assets/monkey_fall_floor_1.png'); // НОВОЕ: Текстура падения на землю
+        this.load.image('monkey_walk_1', 'assets/monkey_walk_1.png'); // НОВОЕ: Анимация ходьбы 1
+        this.load.image('monkey_walk_2', 'assets/monkey_walk_2.png'); // НОВОЕ: Анимация ходьбы 2
         this.load.image('platform', 'assets/balloon_green.png');
         this.load.image('balloon_under_player', 'assets/balloon_under_player.png'); // НОВОЕ: Текстура под игроком
         this.load.image('balloon_smash', 'assets/balloon_smash.png'); // НОВОЕ: Текстура smash
@@ -867,6 +869,17 @@ class GameScene extends Phaser.Scene {
         // ФИКС: Сразу idle-анимация (игрок стоит на земле)
         this.player.anims.stop();
         this.player.setTexture('playerSprite');
+
+        // НОВОЕ: Создаем анимацию ходьбы
+        this.anims.create({
+            key: 'walk',
+            frames: [
+                { key: 'monkey_walk_1' },
+                { key: 'monkey_walk_2' }
+            ],
+            frameRate: 10,  // Скорость анимации (кадров в секунду)
+            repeat: -1       // Бесконечный повтор
+        });
 
         // НОВОЕ: Запоминаем стартовую позицию игрока для расчета score
         this.playerStartY = playerY;
@@ -1904,9 +1917,16 @@ class GameScene extends Phaser.Scene {
                 this.player.setTexture('monkey_up');
             }
         } else if (standingPlatform && !this.isJumping) { // ИЗМЕНЕНО: Добавлена проверка !this.isJumping
-            if (this.player.texture.key !== 'playerSprite') {
-                this.player.anims.stop();
-                this.player.setTexture('playerSprite');
+            // НОВОЕ: Логика анимации ходьбы на земле
+            if (Math.abs(this.player.body.velocity.x) > 10) {
+                // Игрок движется - играем анимацию ходьбы
+                this.player.anims.play('walk', true);
+            } else {
+                // Игрок стоит на месте - idle текстура
+                if (this.player.texture.key !== 'playerSprite') {
+                    this.player.anims.stop();
+                    this.player.setTexture('playerSprite');
+                }
             }
             this.isJumping = false; // Сбрасываем isJumping на платформе
         }
