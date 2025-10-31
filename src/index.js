@@ -1589,9 +1589,17 @@ class GameScene extends Phaser.Scene {
         }
         
         // SOLO режим: обычный Game Over
-        // НОВОЕ: Задержка перед показом экрана Game Over (даём время увидеть анимацию падения)
+        // НОВОЕ: Последовательность анимаций:
+        // 1. monkey_fall_floor показывается сразу (уже установлена в handlePlayerPlatformCollision)
+        // 2. Через 1 секунду меняем на monkey_dumb
         this.time.delayedCall(1000, () => {
-            this.showGameOverScreen();
+            console.log('👊 Меняем текстуру на monkey_dumb (злая обезьяна)');
+            this.player.setTexture('monkey_dumb');
+            
+            // 3. Ещё через небольшую паузу показываем окно Game Over
+            this.time.delayedCall(500, () => {
+                this.showGameOverScreen();
+            });
         });
     }
 
@@ -1634,27 +1642,20 @@ class GameScene extends Phaser.Scene {
         const displayScore = Math.floor(this.score / CONSTS.SCORE_HEIGHT_INCREMENT) * CONSTS.SCORE_HEIGHT_INCREMENT;
         const displayBest = Math.floor(currentBest / CONSTS.SCORE_HEIGHT_INCREMENT) * CONSTS.SCORE_HEIGHT_INCREMENT;
 
-        // НОВОЕ: Обезьянка с кулаком (monkey_dumb.png) - показывается ПЕРЕД окном Game Over
-        const monkeyDumb = this.add.sprite(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 + 150, 'monkey_dumb');
-        monkeyDumb.setOrigin(0.5);
-        monkeyDumb.setScrollFactor(0);
-        monkeyDumb.setDepth(12); // Ниже окна Game Over (depth 13-15)
-        monkeyDumb.setScale(1.5); // Увеличиваем для заметности
-
-        // Фон для Game Over (СДВИГАЕМ ВЫШЕ на 50px)
+        // Фон для Game Over (возвращаем на обычную позицию)
         const gameOverBg = this.add.graphics();
         gameOverBg.fillStyle(0x000000, 0.8);
-        gameOverBg.fillRoundedRect(CONSTS.WIDTH / 2 - 180, CONSTS.HEIGHT / 2 - 190, 360, 280, 15);
+        gameOverBg.fillRoundedRect(CONSTS.WIDTH / 2 - 180, CONSTS.HEIGHT / 2 - 140, 360, 280, 15);
         gameOverBg.setScrollFactor(0).setDepth(14);
 
-        // Тень (СДВИГАЕМ ВЫШЕ на 50px)
+        // Тень (возвращаем на обычную позицию)
         const shadowGraphics = this.add.graphics();
         shadowGraphics.fillStyle(0x000000, 0.5);
-        shadowGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 175, CONSTS.HEIGHT / 2 - 185, 360, 280, 15);
+        shadowGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 175, CONSTS.HEIGHT / 2 - 135, 360, 280, 15);
         shadowGraphics.setScrollFactor(0).setDepth(13);
 
-        // Заголовок "Game Over!" (СДВИГАЕМ ВЫШЕ на 50px)
-        const gameOverText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 150, 'Game Over!', { 
+        // Заголовок "Game Over!" (возвращаем на обычную позицию)
+        const gameOverText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 100, 'Game Over!', { 
             fontSize: '40px', 
             fill: '#FF0000', 
             fontFamily: 'Arial Black', 
@@ -1662,58 +1663,58 @@ class GameScene extends Phaser.Scene {
             strokeThickness: 4 
         }).setOrigin(0.5).setScrollFactor(0).setDepth(15);
 
-        // Статус сервера (СДВИГАЕМ ВЫШЕ на 50px)
-        const serverStatusText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 110, '📤 Отправка...', { 
+        // Статус сервера (возвращаем на обычную позицию)
+        const serverStatusText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 60, '📤 Отправка...', { 
             fontSize: '14px', 
             fill: '#FFFF00', 
             fontFamily: 'Arial' 
         }).setOrigin(0.5).setScrollFactor(0).setDepth(15);
 
-        // NEW RECORD (если есть) (СДВИГАЕМ ВЫШЕ на 50px)
+        // NEW RECORD (если есть) (возвращаем на обычную позицию)
         let newRecordText = null;
         if (isNewRecord) {
-            newRecordText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 85, '★ НОВЫЙ РЕКОРД! ★', { 
+            newRecordText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 35, '★ НОВЫЙ РЕКОРД! ★', { 
                 fontSize: '20px', 
                 fill: '#FFD700', 
                 fontFamily: 'Arial Black' 
             }).setOrigin(0.5).setScrollFactor(0).setDepth(15);
         }
 
-        // Текущий счёт (СДВИГАЕМ ВЫШЕ на 50px)
-        const currentScoreText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 55, `Счёт: ${displayScore}`, { 
+        // Текущий счёт (возвращаем на обычную позицию)
+        const currentScoreText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 5, `Счёт: ${displayScore}`, { 
             fontSize: '28px', 
             fill: '#FFFFFF', 
             fontFamily: 'Arial Black' 
         }).setOrigin(0.5).setScrollFactor(0).setDepth(15);
 
-        // Лучший счёт (СДВИГАЕМ ВЫШЕ на 50px)
-        const bestScoreText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 25, `Лучший: ${displayBest}`, { 
+        // Лучший счёт (возвращаем на обычную позицию)
+        const bestScoreText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 + 25, `Лучший: ${displayBest}`, { 
             fontSize: '20px', 
             fill: '#00FF00', 
             fontFamily: 'Arial' 
         }).setOrigin(0.5).setScrollFactor(0).setDepth(15);
 
-        // Бананы (СДВИГАЕМ ВЫШЕ на 50px)
-        const bananasText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2, `+${earnedBananas} 🍌`, { 
+        // Бананы (возвращаем на обычную позицию)
+        const bananasText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 + 50, `+${earnedBananas} 🍌`, { 
             fontSize: '18px', 
             fill: '#FFA500', 
             fontFamily: 'Arial' 
         }).setOrigin(0.5).setScrollFactor(0).setDepth(15);
 
-        // Кнопка "Рестарт" (СДВИГАЕМ ВЫШЕ на 50px)
+        // Кнопка "Рестарт" (возвращаем на обычную позицию)
         const restartGraphics = this.add.graphics().setDepth(150); // ФИКС: Увеличен depth выше сенсорных зон (90)
         restartGraphics.fillStyle(0x4CAF50, 1);
-        restartGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 140, CONSTS.HEIGHT / 2 + 35, 120, 45, 8);
+        restartGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 140, CONSTS.HEIGHT / 2 + 85, 120, 45, 8);
         restartGraphics.setScrollFactor(0);
 
-        // ФИКС: Создаем невидимую интерактивную зону ПОВЕРХ кнопки (СДВИГАЕМ ВЫШЕ на 50px)
-        const restartZone = this.add.rectangle(CONSTS.WIDTH / 2 - 80, CONSTS.HEIGHT / 2 + 57, 120, 45, 0x000000, 0)
+        // ФИКС: Создаем невидимую интерактивную зону ПОВЕРХ кнопки (возвращаем на обычную позицию)
+        const restartZone = this.add.rectangle(CONSTS.WIDTH / 2 - 80, CONSTS.HEIGHT / 2 + 107, 120, 45, 0x000000, 0)
             .setOrigin(0.5)
             .setScrollFactor(0)
             .setDepth(151) // ФИКС: Еще выше
             .setInteractive({ useHandCursor: true });
         
-        const restartText = this.add.text(CONSTS.WIDTH / 2 - 80, CONSTS.HEIGHT / 2 + 57, 'Рестарт', { 
+        const restartText = this.add.text(CONSTS.WIDTH / 2 - 80, CONSTS.HEIGHT / 2 + 107, 'Рестарт', { 
             fontSize: '20px', 
             fill: '#FFF', 
             fontFamily: 'Arial Black' 
@@ -1725,20 +1726,20 @@ class GameScene extends Phaser.Scene {
 
         });
 
-        // Кнопка "Меню" (СДВИГАЕМ ВЫШЕ на 50px)
+        // Кнопка "Меню" (возвращаем на обычную позицию)
         const menuGraphics = this.add.graphics().setDepth(150); // ФИКС: Увеличен depth выше сенсорных зон (90)
         menuGraphics.fillStyle(0x2196F3, 1);
-        menuGraphics.fillRoundedRect(CONSTS.WIDTH / 2 + 20, CONSTS.HEIGHT / 2 + 35, 120, 45, 8);
+        menuGraphics.fillRoundedRect(CONSTS.WIDTH / 2 + 20, CONSTS.HEIGHT / 2 + 85, 120, 45, 8);
         menuGraphics.setScrollFactor(0);
 
-        // ФИКС: Создаем невидимую интерактивную зону ПОВЕРХ кнопки (СДВИГАЕМ ВЫШЕ на 50px)
-        const menuZone = this.add.rectangle(CONSTS.WIDTH / 2 + 80, CONSTS.HEIGHT / 2 + 57, 120, 45, 0x000000, 0)
+        // ФИКС: Создаем невидимую интерактивную зону ПОВЕРХ кнопки (возвращаем на обычную позицию)
+        const menuZone = this.add.rectangle(CONSTS.WIDTH / 2 + 80, CONSTS.HEIGHT / 2 + 107, 120, 45, 0x000000, 0)
             .setOrigin(0.5)
             .setScrollFactor(0)
             .setDepth(151) // ФИКС: Еще выше
             .setInteractive({ useHandCursor: true });
         
-        const menuText = this.add.text(CONSTS.WIDTH / 2 + 80, CONSTS.HEIGHT / 2 + 57, 'Меню', { 
+        const menuText = this.add.text(CONSTS.WIDTH / 2 + 80, CONSTS.HEIGHT / 2 + 107, 'Меню', { 
             fontSize: '20px', 
             fill: '#FFF', 
             fontFamily: 'Arial Black' 
