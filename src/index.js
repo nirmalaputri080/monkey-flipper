@@ -202,7 +202,7 @@ const CONSTS = {
     PLATFORM_TYPE_UNBREAKABLE_PERCENT: 10, // 10% нелопающихся шариков
     MOVING_PLATFORM_SPEED: 20, // Скорость движения шариков
     MOVING_PLATFORM_RANGE: 150, // Диапазон движения (px влево/вправо)
-    BALLOON_SMASH_DURATION: 400, // НОВОЕ: Длительность анимации взрыва шарика (ms) - было 1000
+    BALLOON_SMASH_DURATION: 300, // НОВОЕ: Длительность анимации взрыва шарика (ms) - было 1000
 };
 
 class MenuScene extends Phaser.Scene {
@@ -354,67 +354,67 @@ class MenuScene extends Phaser.Scene {
         this.shopElements.push(shadowGraphics);
 
         // Заголовок
-        const titleText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 30, 'Магазин', { fontSize: '32px', fill: '#FFFFFF', fontFamily: 'Arial Black', stroke: '#000000', strokeThickness: 4, align: 'center' }).setOrigin(0.5).setDepth(15).setAlpha(0).setScale(0);
+        const titleText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 30, 'Shop', { fontSize: '32px', fill: '#FFFFFF', fontFamily: 'Arial Black', stroke: '#000000', strokeThickness: 4, align: 'center' }).setOrigin(0.5).setDepth(15).setAlpha(0).setScale(0);
         this.shopElements.push(titleText);
 
         // Отображение валюты
-        const bananasText = this.add.text(CONSTS.WIDTH / 2 - 100, CONSTS.HEIGHT / 2 - shopHeight / 2 + 70, `Бананы: ${bananas}`, { fontSize: '24px', fill: '#FFFFFF' }).setOrigin(0.5).setDepth(15).setAlpha(0).setScale(0);
+        const bananasText = this.add.text(CONSTS.WIDTH / 2 - 100, CONSTS.HEIGHT / 2 - shopHeight / 2 + 70, `Bananas: ${bananas}`, { fontSize: '24px', fill: '#FFFFFF' }).setOrigin(0.5).setDepth(15).setAlpha(0).setScale(0);
         this.shopElements.push(bananasText);
 
-        const coinsText = this.add.text(CONSTS.WIDTH / 2 + 100, CONSTS.HEIGHT / 2 - shopHeight / 2 + 70, `Монеты: ${coins}`, { fontSize: '24px', fill: '#FFFFFF' }).setOrigin(0.5).setDepth(15).setAlpha(0).setScale(0);
+        const coinsText = this.add.text(CONSTS.WIDTH / 2 + 100, CONSTS.HEIGHT / 2 - shopHeight / 2 + 70, `Coins: ${coins}`, { fontSize: '24px', fill: '#FFFFFF' }).setOrigin(0.5).setDepth(15).setAlpha(0).setScale(0);
         this.shopElements.push(coinsText);
 
         // Секция заработка бананов (моки)
-        const dailyButton = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 110, 'Ежедневное задание (+50 бананов)', { fontSize: '20px', fill: '#FFFFFF' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(15).setAlpha(0).setScale(0);
+        const dailyButton = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 110, 'Daily Quest (+50 Bananas)', { fontSize: '20px', fill: '#FFFFFF' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(15).setAlpha(0).setScale(0);
         dailyButton.on('pointerdown', () => {
             bananas += 50;
             localStorage.setItem('bananas', bananas);
-            bananasText.setText(`Бананы: ${bananas}`);
+            bananasText.setText(`Bananas: ${bananas}`);
         });
         this.shopElements.push(dailyButton);
 
-        const adButton = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 140, 'Просмотр рекламы (+100 бананов)', { fontSize: '20px', fill: '#FFFFFF' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(15).setAlpha(0).setScale(0);
+        const adButton = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 140, 'Watch Ad (+100 Bananas)', { fontSize: '20px', fill: '#FFFFFF' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(15).setAlpha(0).setScale(0);
         adButton.on('pointerdown', () => {
             bananas += 100;
             localStorage.setItem('bananas', bananas);
-            bananasText.setText(`Бананы: ${bananas}`);
+            bananasText.setText(`Bananas: ${bananas}`);
         });
         this.shopElements.push(adButton);
 
-        const buyCoinsButton = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 170, 'Купить монеты (+100 за реал, мок)', { fontSize: '20px', fill: '#FFFFFF' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(15).setAlpha(0).setScale(0);
+        const buyCoinsButton = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 170, 'Buy Coins (+100 for real, mock)', { fontSize: '20px', fill: '#FFFFFF' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(15).setAlpha(0).setScale(0);
         buyCoinsButton.on('pointerdown', () => {
             coins += 100;
             localStorage.setItem('coins', coins);
-            coinsText.setText(`Монеты: ${coins}`);
+            coinsText.setText(`Coins: ${coins}`);
         });
         this.shopElements.push(buyCoinsButton);
 
         // Секция скинов (моки)
-        const skin1Button = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 210, 'Обычный скин (100 бананов)', { fontSize: '20px', fill: '#FFFFFF' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(15).setAlpha(0).setScale(0);
+        const skin1Button = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 210, 'Normal skin (100 Bananas)', { fontSize: '20px', fill: '#FFFFFF' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(15).setAlpha(0).setScale(0);
         skin1Button.on('pointerdown', () => {
             if (bananas >= 100) {
                 bananas -= 100;
                 localStorage.setItem('bananas', bananas);
-                bananasText.setText(`Бананы: ${bananas}`);
-                console.log('Обычный скин куплен и применён (мок)');
-                // Здесь можно добавить логику применения скина в GameScene, но пока мок
+                bananasText.setText(`Bananas: ${bananas}`);
+                console.log('Normal skin purchased and applied (mock)');
+                // Here you can add the logic to apply the skin in GameScene, but for now it's a mock
             }
         });
         this.shopElements.push(skin1Button);
 
-        const skin2Button = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 240, 'Эксклюзивный скин (500 бананов)', { fontSize: '20px', fill: '#FFFFFF' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(15).setAlpha(0).setScale(0);
+        const skin2Button = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 240, 'Exclusive skin (500 Bananas)', { fontSize: '20px', fill: '#FFFFFF' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(15).setAlpha(0).setScale(0);
         skin2Button.on('pointerdown', () => {
             if (bananas >= 500) {
                 bananas -= 500;
                 localStorage.setItem('bananas', bananas);
-                bananasText.setText(`Бананы: ${bananas}`);
-                console.log('Эксклюзивный скин куплен и применён (мок)');
+                bananasText.setText(`Bananas: ${bananas}`);
+                console.log('Exclusive skin purchased and applied (mock)');
             }
         });
         this.shopElements.push(skin2Button);
 
         // Секция бустов
-        const rocketButton = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 280, 'Ракета (50 бананов)', { fontSize: '20px', fill: '#FFFFFF' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(15).setAlpha(0).setScale(0);
+        const rocketButton = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 280, 'Rocket (50 Bananas)', { fontSize: '20px', fill: '#FFFFFF' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(15).setAlpha(0).setScale(0);
         rocketButton.on('pointerdown', () => {
             if (bananas >= 50) {
                 bananas -= 50;
@@ -422,12 +422,12 @@ class MenuScene extends Phaser.Scene {
                 rockets += 1;
                 localStorage.setItem('bananas', bananas);
                 localStorage.setItem('rockets', rockets);
-                bananasText.setText(`Бананы: ${bananas}`);
+                bananasText.setText(`Bananas: ${bananas}`);
             }
         });
         this.shopElements.push(rocketButton);
 
-        const lifeButton = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 310, 'Доп. жизнь (20 монет, макс 3)', { fontSize: '20px', fill: '#FFFFFF' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(15).setAlpha(0).setScale(0);
+        const lifeButton = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 310, 'Extra Life (20 Coins, max 3)', { fontSize: '20px', fill: '#FFFFFF' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(15).setAlpha(0).setScale(0);
         lifeButton.on('pointerdown', () => {
             let extraLives = parseInt(localStorage.getItem('extraLives')) || 0;
             if (coins >= 20 && extraLives < 3) {
@@ -447,7 +447,7 @@ class MenuScene extends Phaser.Scene {
         backGraphics.setAlpha(0).setScale(0);
         this.shopElements.push(backGraphics);
 
-        const backText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 + shopHeight / 2 - 35, 'Назад', { fontSize: '24px', fill: '#000', fontFamily: 'Arial' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(16).setAlpha(0).setScale(0);
+        const backText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 + shopHeight / 2 - 35, 'Back', { fontSize: '24px', fill: '#000', fontFamily: 'Arial' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(16).setAlpha(0).setScale(0);
         this.shopElements.push(backText);
 
         backText.on('pointerdown', () => {
