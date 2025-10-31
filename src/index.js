@@ -1642,20 +1642,20 @@ class GameScene extends Phaser.Scene {
         const displayScore = Math.floor(this.score / CONSTS.SCORE_HEIGHT_INCREMENT) * CONSTS.SCORE_HEIGHT_INCREMENT;
         const displayBest = Math.floor(currentBest / CONSTS.SCORE_HEIGHT_INCREMENT) * CONSTS.SCORE_HEIGHT_INCREMENT;
 
-        // Фон для Game Over (возвращаем на обычную позицию)
+        // Фон для Game Over (поднимаем выше на 40px)
         const gameOverBg = this.add.graphics();
         gameOverBg.fillStyle(0x000000, 0.8);
-        gameOverBg.fillRoundedRect(CONSTS.WIDTH / 2 - 180, CONSTS.HEIGHT / 2 - 140, 360, 280, 15);
+        gameOverBg.fillRoundedRect(CONSTS.WIDTH / 2 - 180, CONSTS.HEIGHT / 2 - 180, 360, 280, 15);
         gameOverBg.setScrollFactor(0).setDepth(14);
 
-        // Тень (возвращаем на обычную позицию)
+        // Тень (поднимаем выше на 40px)
         const shadowGraphics = this.add.graphics();
         shadowGraphics.fillStyle(0x000000, 0.5);
-        shadowGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 175, CONSTS.HEIGHT / 2 - 135, 360, 280, 15);
+        shadowGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 175, CONSTS.HEIGHT / 2 - 175, 360, 280, 15);
         shadowGraphics.setScrollFactor(0).setDepth(13);
 
-        // Заголовок "Game Over!" (возвращаем на обычную позицию)
-        const gameOverText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 100, 'Game Over!', { 
+        // Заголовок "Game Over!" (поднимаем выше на 40px)
+        const gameOverText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 140, 'Game Over!', { 
             fontSize: '40px', 
             fill: '#FF0000', 
             fontFamily: 'Arial Black', 
@@ -1663,58 +1663,58 @@ class GameScene extends Phaser.Scene {
             strokeThickness: 4 
         }).setOrigin(0.5).setScrollFactor(0).setDepth(15);
 
-        // Статус сервера (возвращаем на обычную позицию)
-        const serverStatusText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 60, '📤 Отправка...', { 
+        // Статус сервера (поднимаем выше на 40px)
+        const serverStatusText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 100, '📤 Отправка...', { 
             fontSize: '14px', 
             fill: '#FFFF00', 
             fontFamily: 'Arial' 
         }).setOrigin(0.5).setScrollFactor(0).setDepth(15);
 
-        // NEW RECORD (если есть) (возвращаем на обычную позицию)
+        // NEW RECORD (если есть) (поднимаем выше на 40px)
         let newRecordText = null;
         if (isNewRecord) {
-            newRecordText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 35, '★ НОВЫЙ РЕКОРД! ★', { 
+            newRecordText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 75, '★ НОВЫЙ РЕКОРД! ★', { 
                 fontSize: '20px', 
                 fill: '#FFD700', 
                 fontFamily: 'Arial Black' 
             }).setOrigin(0.5).setScrollFactor(0).setDepth(15);
         }
 
-        // Текущий счёт (возвращаем на обычную позицию)
-        const currentScoreText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 5, `Счёт: ${displayScore}`, { 
+        // Текущий счёт (поднимаем выше на 40px)
+        const currentScoreText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 45, `Счёт: ${displayScore}`, { 
             fontSize: '28px', 
             fill: '#FFFFFF', 
             fontFamily: 'Arial Black' 
         }).setOrigin(0.5).setScrollFactor(0).setDepth(15);
 
-        // Лучший счёт (возвращаем на обычную позицию)
-        const bestScoreText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 + 25, `Лучший: ${displayBest}`, { 
+        // Лучший счёт (поднимаем выше на 40px)
+        const bestScoreText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 15, `Лучший: ${displayBest}`, { 
             fontSize: '20px', 
             fill: '#00FF00', 
             fontFamily: 'Arial' 
         }).setOrigin(0.5).setScrollFactor(0).setDepth(15);
 
-        // Бананы (возвращаем на обычную позицию)
-        const bananasText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 + 50, `+${earnedBananas} 🍌`, { 
+        // Бананы (поднимаем выше на 40px)
+        const bananasText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 + 10, `+${earnedBananas} 🍌`, { 
             fontSize: '18px', 
             fill: '#FFA500', 
             fontFamily: 'Arial' 
         }).setOrigin(0.5).setScrollFactor(0).setDepth(15);
 
-        // Кнопка "Рестарт" (возвращаем на обычную позицию)
+        // Кнопка "Рестарт" (поднимаем выше на 40px)
         const restartGraphics = this.add.graphics().setDepth(150); // ФИКС: Увеличен depth выше сенсорных зон (90)
         restartGraphics.fillStyle(0x4CAF50, 1);
-        restartGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 140, CONSTS.HEIGHT / 2 + 85, 120, 45, 8);
+        restartGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 140, CONSTS.HEIGHT / 2 + 45, 120, 45, 8);
         restartGraphics.setScrollFactor(0);
 
-        // ФИКС: Создаем невидимую интерактивную зону ПОВЕРХ кнопки (возвращаем на обычную позицию)
-        const restartZone = this.add.rectangle(CONSTS.WIDTH / 2 - 80, CONSTS.HEIGHT / 2 + 107, 120, 45, 0x000000, 0)
+        // ФИКС: Создаем невидимую интерактивную зону ПОВЕРХ кнопки (поднимаем выше на 40px)
+        const restartZone = this.add.rectangle(CONSTS.WIDTH / 2 - 80, CONSTS.HEIGHT / 2 + 67, 120, 45, 0x000000, 0)
             .setOrigin(0.5)
             .setScrollFactor(0)
             .setDepth(151) // ФИКС: Еще выше
             .setInteractive({ useHandCursor: true });
         
-        const restartText = this.add.text(CONSTS.WIDTH / 2 - 80, CONSTS.HEIGHT / 2 + 107, 'Рестарт', { 
+        const restartText = this.add.text(CONSTS.WIDTH / 2 - 80, CONSTS.HEIGHT / 2 + 67, 'Рестарт', { 
             fontSize: '20px', 
             fill: '#FFF', 
             fontFamily: 'Arial Black' 
@@ -1726,20 +1726,20 @@ class GameScene extends Phaser.Scene {
 
         });
 
-        // Кнопка "Меню" (возвращаем на обычную позицию)
+        // Кнопка "Меню" (поднимаем выше на 40px)
         const menuGraphics = this.add.graphics().setDepth(150); // ФИКС: Увеличен depth выше сенсорных зон (90)
         menuGraphics.fillStyle(0x2196F3, 1);
-        menuGraphics.fillRoundedRect(CONSTS.WIDTH / 2 + 20, CONSTS.HEIGHT / 2 + 85, 120, 45, 8);
+        menuGraphics.fillRoundedRect(CONSTS.WIDTH / 2 + 20, CONSTS.HEIGHT / 2 + 45, 120, 45, 8);
         menuGraphics.setScrollFactor(0);
 
-        // ФИКС: Создаем невидимую интерактивную зону ПОВЕРХ кнопки (возвращаем на обычную позицию)
-        const menuZone = this.add.rectangle(CONSTS.WIDTH / 2 + 80, CONSTS.HEIGHT / 2 + 107, 120, 45, 0x000000, 0)
+        // ФИКС: Создаем невидимую интерактивную зону ПОВЕРХ кнопки (поднимаем выше на 40px)
+        const menuZone = this.add.rectangle(CONSTS.WIDTH / 2 + 80, CONSTS.HEIGHT / 2 + 67, 120, 45, 0x000000, 0)
             .setOrigin(0.5)
             .setScrollFactor(0)
             .setDepth(151) // ФИКС: Еще выше
             .setInteractive({ useHandCursor: true });
         
-        const menuText = this.add.text(CONSTS.WIDTH / 2 + 80, CONSTS.HEIGHT / 2 + 107, 'Меню', { 
+        const menuText = this.add.text(CONSTS.WIDTH / 2 + 80, CONSTS.HEIGHT / 2 + 67, 'Меню', { 
             fontSize: '20px', 
             fill: '#FFF', 
             fontFamily: 'Arial Black' 
