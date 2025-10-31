@@ -887,14 +887,19 @@ class GameScene extends Phaser.Scene {
         this.opponent.setTint(0x6666FF); // Синий оттенок вместо красного (легче отличить)
         this.opponent.setDepth(9); // Чуть ниже основного игрока
         
-        // Добавляем пульсирующий эффект для лучшей видимости
-        this.tweens.add({
+        // ИСПРАВЛЕНИЕ: Скрываем призрака до первого opponentUpdate
+        this.opponent.setVisible(false);
+        this.opponentInitialized = false; // Флаг что призрак еще не получил реальную позицию
+        
+        // Добавляем пульсирующий эффект для лучшей видимости (запустится после показа)
+        this.opponentPulseTween = this.tweens.add({
             targets: this.opponent,
             alpha: 0.4,
             duration: 1000,
             ease: 'Sine.easeInOut',
             yoyo: true,
-            repeat: -1
+            repeat: -1,
+            paused: true // Ставим на паузу до первого показа
         });
         
         console.log('👻 Opponent ghost создан');
@@ -909,6 +914,9 @@ class GameScene extends Phaser.Scene {
             stroke: '#000000',
             strokeThickness: 3
         }).setOrigin(0.5).setDepth(9);
+        
+        // Скрываем имя до первого появления
+        this.opponentNameText.setVisible(false);
         
         // Обновляем позицию текста
         this.updateOpponentNamePosition();
@@ -1024,18 +1032,34 @@ class GameScene extends Phaser.Scene {
             
             // Обновляем позицию ghost спрайта (с интерполяцией)
             if (this.opponent && this.opponentData.isAlive) {
-                console.log('👻 Обновляю позицию ghost на X:', data.x, 'Y:', data.y);
+                // ПЕРВОЕ ПОЯВЛЕНИЕ: Показываем призрака при первом обновлении
+                if (!this.opponentInitialized) {
+                    console.log('👻 ПЕРВОЕ появление призрака на реальной позиции!');
+                    this.opponent.setPosition(data.x, data.y); // Ставим сразу без анимации
+                    this.opponent.setVisible(true); // Показываем
+                    this.opponentPulseTween.play(); // Запускаем пульсацию
+                    this.opponentInitialized = true;
+                    
+                    // Показываем имя оппонента
+                    if (this.opponentNameText) {
+                        this.opponentNameText.setVisible(true);
+                    }
+                } else {
+                    // Обычное обновление с интерполяцией
+                    console.log('👻 Обновляю позицию ghost на X:', data.x, 'Y:', data.y);
+                    
+                    // Плавная интерполяция позиции (увеличена длительность для плавности)
+                    this.tweens.add({
+                        targets: this.opponent,
+                        x: data.x,
+                        y: data.y,
+                        duration: 200, // Увеличено со 100ms до 200ms
+                        ease: 'Cubic.easeOut' // Более плавное замедление
+                    });
+                }
+                
                 console.log('   Текущая позиция ghost:', this.opponent.x, this.opponent.y);
                 console.log('   Ghost visible:', this.opponent.visible);
-                
-                // Плавная интерполяция позиции (увеличена длительность для плавности)
-                this.tweens.add({
-                    targets: this.opponent,
-                    x: data.x,
-                    y: data.y,
-                    duration: 200, // Увеличено со 100ms до 200ms
-                    ease: 'Cubic.easeOut' // Более плавное замедление
-                });
             } else {
                 console.log('⚠️ Ghost не обновлен! opponent:', !!this.opponent, 'isAlive:', this.opponentData.isAlive);
             }
