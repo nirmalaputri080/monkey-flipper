@@ -2130,7 +2130,7 @@ class GameScene extends Phaser.Scene {
             // НОВОЕ: Устанавливаем текстуру в зависимости от типа
             if (platform.platformType === 'unbreakable') {
                 platform.setTexture('balloon_unbreakable');
-                platform.setScale(59/30, 110/73);
+                platform.setScale(50/30, 100/73);
             } else {
                 platform.setTexture('platform'); // normal и moving используют обычную зеленую текстуру
             }
