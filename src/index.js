@@ -695,6 +695,7 @@ class GameScene extends Phaser.Scene {
         this.load.image('platform', 'assets/balloon_green.png');
         this.load.image('balloon_under_player', 'assets/balloon_under_player.png'); // НОВОЕ: Текстура под игроком
         this.load.image('balloon_smash', 'assets/balloon_smash.png'); // НОВОЕ: Текстура smash
+        this.load.image('balloon_unbreakable_smash', 'assets/balloon_blue_smash.png'); // НОВОЕ: Текстура smash для нелопающихся шариков
         this.load.image('balloon_dead', 'assets/balloon_dead.png'); // НОВОЕ: Текстура dead
         this.load.image('balloon_unbreakable', 'assets/balloon_blue.png'); // НОВОЕ: Текстура для нелопающихся шариков (синий цвет)
         this.load.image('ground', 'assets/ground.png');
@@ -1479,15 +1480,30 @@ class GameScene extends Phaser.Scene {
     if (player.body.touching.down && !platformObj.isGround && player.body.velocity.y >= 0 && platformObj !== this.lastBouncePlatform) {
         // НОВОЕ: Обработка нелопающихся шариков
         if (platformObj.platformType === 'unbreakable') {
-            console.log('🔵 Прыжок с нелопающегося шарика!');
-            player.setVelocityY(CONSTS.JUMP_VELOCITY); // Прыжок вверх
-            this.player.anims.stop();
-            this.player.setTexture('monkey_up'); // ФИКС: Статичная текстура
-            this.isJumping = true;
-            // Не запоминаем в lastBouncePlatform - можно прыгать повторно!
-            // Не меняем текстуру и не ставим isLanded
-            return;
+    console.log('🔵 Прыжок с нелопающегося шарика!');
+    player.setVelocityY(CONSTS.JUMP_VELOCITY);
+    this.player.anims.stop();
+    this.player.setTexture('monkey_up');
+    
+    // НОВОЕ: Эффект пружины для синего шара
+    platformObj.setTexture('balloon_unbreakable_smash'); // Меняем на сжатую текстуру
+    
+    // Анимация сжатия (пружина)
+    this.tweens.add({
+        targets: platformObj,
+        scaleY: 0.8,  // Сжимаем по вертикали
+        duration: 150, // 0.15 сек сжатия
+        ease: 'Quad.easeOut',
+        yoyo: true,    // Возврат к исходному размеру
+        repeat: 0,
+        onComplete: () => {
+            // Возвращаем обычную текстуру после анимации
+            platformObj.setTexture('balloon_unbreakable');
         }
+    });
+    
+    return;
+}
         
         // НОВОЕ: Остановка движения для движущихся платформ при приземлении
         if (platformObj.platformType === 'moving' && !platformObj.isLanded) {
