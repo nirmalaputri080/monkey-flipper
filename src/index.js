@@ -1986,9 +1986,9 @@ class GameScene extends Phaser.Scene {
     // ФИКС: Камера не должна уходить ниже земли (ограничиваем снизу тоже)
     const minScrollY = -Infinity; // Можно уходить вверх бесконечно
     const targetScrollY = Phaser.Math.Clamp(desiredScrollY, minScrollY, maxScrollY);
-    
-    // ФИКС: ЕЩЕ БОЛЕЕ ПЛАВНОЕ движение камеры (lerp 0.12 для Y — быстрее следит за прыжком)
-    camera.scrollY = Phaser.Math.Linear(camera.scrollY, targetScrollY, 0.12);
+
+    // ФИКС: ЕЩЕ БОЛЕЕ ПЛАВНОЕ движение камеры (lerp 0.08 для Y — быстрее следит за прыжком)
+    camera.scrollY = Phaser.Math.Linear(camera.scrollY, targetScrollY, 0.08);
     
     // ФИКС: Обновляем счет каждый кадр!
     this.updateScore();
