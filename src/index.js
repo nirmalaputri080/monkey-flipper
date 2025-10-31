@@ -168,15 +168,22 @@ async function retryPendingScores() {
 
 // Константы
 const CONSTS = {
-    WIDTH: 640,
+    // АДАПТИВНАЯ ШИРИНА: подстраивается под экран
+    WIDTH: (() => {
+        // Для мобильных - используем ширину окна
+        const screenWidth = window.innerWidth || 640;
+        // Ограничиваем минимум 320 (старые телефоны) и максимум 1920 (десктоп)
+        return Math.min(Math.max(screenWidth, 320), 1920);
+    })(),
     HEIGHT: (() => {
         // Для Telegram используем viewportHeight, для браузера - innerHeight
         if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.viewportHeight) {
             console.log('📱 Используем Telegram viewportHeight:', window.Telegram.WebApp.viewportHeight);
             return window.Telegram.WebApp.viewportHeight;
         }
-        console.log('🌐 Используем window.innerHeight:', window.innerHeight);
-        return window.innerHeight;
+        const screenHeight = window.innerHeight || 800;
+        console.log('🌐 Используем window.innerHeight:', screenHeight);
+        return screenHeight;
     })(),
     GRAVITY: 650, // ФИКС: Увеличено в 2 раза (было 300) - прыжки быстрее
     JUMP_VELOCITY: -660, // ФИКС: Ещё больше увеличено (было -550) - чтобы допрыгивать до платформ
@@ -2341,7 +2348,7 @@ const config = {
     height: CONSTS.HEIGHT,
     parent: 'game-container', // Контейнер для canvas
     scale: {
-        mode: Phaser.Scale.FIT, // ФИКС: FIT сохраняет пропорции и масштабирует
+        mode: Phaser.Scale.RESIZE, // RESIZE адаптируется под любой экран
         autoCenter: Phaser.Scale.CENTER_BOTH, // Центрируем
         width: CONSTS.WIDTH,
         height: CONSTS.HEIGHT
