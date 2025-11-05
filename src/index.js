@@ -215,7 +215,7 @@ class MenuScene extends Phaser.Scene {
     preload() {
         this.load.image('background_img', 'assets/background.png');
         this.load.image('background_img_menu', 'assets/background_menu.jpg');
-        this.load.image('logo', 'assets/LogoJumper.png');
+        
     }
 
     create() {
@@ -245,15 +245,6 @@ class MenuScene extends Phaser.Scene {
                 lineSpacing: 5
             }
         ).setDepth(21);
-
-        const titleImage = this.add.image(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 4, 'logo').setOrigin(0.5).setAlpha(0);
-        this.tweens.add({
-            targets: titleImage,
-            scale: { from: 0, to: 1 },
-            alpha: { from: 0, to: 1 },
-            duration: 1000,
-            ease: 'Bounce.easeOut'
-        });
 
         // Кнопки (увеличили расстояние между ними)
         const buttons = [
