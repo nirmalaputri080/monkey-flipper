@@ -549,11 +549,16 @@ class MatchmakingScene extends Phaser.Scene {
         // Подключаемся к Socket.IO серверу
         const socketUrl = SERVER_URL || window.location.origin;
         console.log('🔌 Подключение к серверу:', socketUrl);
+        console.log('👤 Мои данные:', this.userData);
         
         this.socket = io(socketUrl);
         
         this.socket.on('connect', () => {
             console.log('✅ Подключено к серверу Socket.IO:', this.socket.id);
+            console.log('📤 Отправляю данные для матчмейкинга:', {
+                userId: this.userData.id,
+                username: this.userData.username
+            });
             
             // Начинаем поиск матча
             this.socket.emit('findMatch', {
@@ -568,6 +573,9 @@ class MatchmakingScene extends Phaser.Scene {
         
         this.socket.on('gameStart', (data) => {
             console.log('🎮 Игра началась!', data);
+            console.log('🆚 Мой ID:', this.userData.id);
+            console.log('🆚 ID оппонента:', data.opponent?.id);
+            console.log('⚠️ ПРОВЕРКА: Это один и тот же игрок?', this.userData.id === data.opponent?.id);
             
             // Останавливаем таймер точек
             if (this.dotTimer) {
