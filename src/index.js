@@ -1936,6 +1936,7 @@ class GameScene extends Phaser.Scene {
     this.updateMovingPlatforms(); // НОВОЕ: Обновляем движущиеся платформы
     this.refactorPlatforms();
     this.checkGameOver();
+    
     // УБРАНО: Логика зацепления за бока (clingPlatform) полностью удалена
     if (Phaser.Input.Keyboard.JustDown(this.rKey) && this.rockets > 0 && !this.rocketActive) {
         this.rocketActive = true;
