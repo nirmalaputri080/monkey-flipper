@@ -214,12 +214,13 @@ class MenuScene extends Phaser.Scene {
 
     preload() {
         this.load.image('background_img', 'assets/background.png');
+        this.load.image('background_img_menu', 'assets/background_menu.jpg');
         this.load.image('logo', 'assets/LogoJumper.png');
     }
 
     create() {
         // Фон с растяжкой (stretch) без повторения, как в GameScene
-        this.background = this.add.image(0, 0, 'background_img').setOrigin(0, 0);
+        this.background = this.add.image(0, 0, 'background_img_menu').setOrigin(0, 0);
         this.background.setDisplaySize(CONSTS.WIDTH, CONSTS.HEIGHT);
 
         // НОВОЕ: Отладочная информация о Telegram пользователе
