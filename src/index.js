@@ -30,8 +30,8 @@ const SOCKET_SERVER_URL = window.location.hostname === 'localhost'
 
 // API сервер (Vercel) - для сохранения счетов и лидерборда
 const API_SERVER_URL = window.location.hostname === 'localhost'
-    ? 'http://localhost:3000'  // Для локальной разработки
-    : window.location.origin;  // Используем тот же домен (Vercel)
+    ? 'http://localhost:3001'  // Для локальной разработки
+    : 'https://monkey-flipper-api.onrender.com';  // API на Render (замени на реальный URL)
 
 // Старая переменная для обратной совместимости (используется в Socket.IO коде)
 const SERVER_URL = SOCKET_SERVER_URL;  
