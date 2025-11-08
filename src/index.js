@@ -80,7 +80,9 @@ function getTelegramUserId() {
 // НОВОЕ: Функция отправки счета на сервер
 async function saveScoreToServer(userId, username, score) {
     try {
-        console.log(`📤 Отправка счета на сервер: userId=${userId}, score=${score}`);
+        // Округляем счет до целого числа для базы данных
+        const roundedScore = Math.round(score);
+        console.log(`📤 Отправка счета на сервер: userId=${userId}, score=${roundedScore}`);
         
         const response = await fetch(`${API_SERVER_URL}/api/save-score`, {
             method: 'POST',
@@ -90,7 +92,7 @@ async function saveScoreToServer(userId, username, score) {
             body: JSON.stringify({
                 userId: userId,
                 username: username,
-                score: score,
+                score: roundedScore,
                 timestamp: new Date().toISOString()
             })
         });
@@ -125,11 +127,13 @@ async function saveScoreToServer(userId, username, score) {
 // НОВОЕ: Сохранение неотправленных счетов для повторной попытки
 function savePendingScore(userId, username, score) {
     try {
+        // Округляем счет до целого числа
+        const roundedScore = Math.round(score);
         const pending = JSON.parse(localStorage.getItem('pendingScores') || '[]');
         pending.push({
             userId: userId,
             username: username,
-            score: score,
+            score: roundedScore,
             timestamp: Date.now()
         });
         // Храним максимум 10 неотправленных счетов
