@@ -231,13 +231,16 @@
     </div>
 
     <script>
+        // API сервер на Render
+        const API_SERVER_URL = 'https://monkey-flipper-djm1.onrender.com';
+
         async function loadLeaderboard() {
             const container = document.getElementById('leaderboard');
             
             try {
                 container.innerHTML = '<div class="loading">⏳ Загрузка...</div>';
                 
-                const response = await fetch('/api/save-score?limit=100');
+                const response = await fetch(`${API_SERVER_URL}/api/leaderboard?limit=100`);
                 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -249,14 +252,15 @@
                     throw new Error('Server returned error');
                 }
 
-                const { leaderboard, count } = data;
+                const leaderboard = data.rows || [];
+                const count = leaderboard.length;
 
                 // Обновляем статистику
                 document.getElementById('totalPlayers').textContent = count;
                 document.getElementById('topScore').textContent = leaderboard.length > 0 
-                    ? leaderboard[0].bestScore.toLocaleString()
+                    ? leaderboard[0].score.toLocaleString()
                     : '-';
-                document.getElementById('totalGames').textContent = leaderboard.reduce((sum, p) => sum + p.gamesPlayed, 0);
+                document.getElementById('totalGames').textContent = count;
 
                 // Отображаем рейтинг
                 if (leaderboard.length === 0) {
@@ -280,8 +284,8 @@
                         medal = '🥉';
                     }
 
-                    const lastPlayed = player.lastPlayed 
-                        ? new Date(player.lastPlayed).toLocaleDateString('ru-RU')
+                    const lastPlayed = player.timestamp 
+                        ? new Date(player.timestamp).toLocaleDateString('ru-RU')
                         : 'Неизвестно';
 
                     return `
@@ -291,11 +295,10 @@
                             <div class="player-info">
                                 <div class="username">${escapeHtml(player.username)}</div>
                                 <div class="player-stats">
-                                    🎮 Игр: ${player.gamesPlayed} | 
                                     📅 Последняя: ${lastPlayed}
                                 </div>
                             </div>
-                            <div class="score">${player.bestScore.toLocaleString()}</div>
+                            <div class="score">${player.score.toLocaleString()}</div>
                         </div>
                     `;
                 }).join('');
