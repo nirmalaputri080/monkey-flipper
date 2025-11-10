@@ -1144,9 +1144,27 @@ class GameScene extends Phaser.Scene {
     }
 
     create(data) {
-        // ==================== 1V1 MODE INITIALIZATION ====================
-        // Проверяем, запускаемся ли в 1v1 режиме
-        if (data && data.mode === '1v1') {
+        // ==================== MODE INITIALIZATION ====================
+        // Проверяем режим: solo / 1v1 (matchmaking) / duel (challenge)
+        
+        if (data && data.mode === 'duel') {
+            // НОВОЕ: Режим дуэли (вызов на дуэль)
+            this.gameMode = 'duel';
+            this.gameSeed = data.seed;
+            this.matchId = data.matchId;
+            this.opponentUsername = data.opponentUsername || 'Opponent';
+            this.duelCompleted = false;
+            
+            // Инициализируем seeded random для одинаковых платформ
+            this.seededRandom = new SeededRandom(this.gameSeed);
+            
+            console.log('⚔️ Duel режим активирован!');
+            console.log('   Match ID:', this.matchId);
+            console.log('   Seed:', this.gameSeed);
+            console.log('   Opponent:', this.opponentUsername);
+            
+        } else if (data && data.mode === '1v1') {
+            // Режим 1v1 matchmaking (существующий)
             this.gameMode = '1v1';
             this.gameSeed = data.seed;
             this.roomId = data.roomId;
@@ -2061,6 +2079,11 @@ class GameScene extends Phaser.Scene {
     showGameOverScreen() {
         console.log('💀 Game Over! Показываем экран...');
         
+        // НОВОЕ: Если режим дуэли - завершаем дуэль через API
+        if (this.gameMode === 'duel' && this.matchId && !this.duelCompleted) {
+            this.completeDuel();
+        }
+        
         // ФИКС: КРИТИЧНО - Полностью уничтожаем сенсорные зоны ПЕРЕД созданием UI
         this.hideTouchZones();
         
@@ -2226,6 +2249,280 @@ class GameScene extends Phaser.Scene {
                 serverStatusText.setText('❌ Ошибка');
                 serverStatusText.setColor('#FF0000');
             });
+    }
+    
+    // НОВОЕ: Завершение дуэли через API
+    async completeDuel() {
+        if (this.duelCompleted) return; // Защита от двойного вызова
+        this.duelCompleted = true;
+        
+        const userData = getTelegramUserId();
+        const roundedScore = Math.round(this.score);
+        
+        try {
+            console.log(`⚔️ Завершаем дуэль: matchId=${this.matchId}, score=${roundedScore}`);
+            
+            const response = await fetch(`${API_SERVER_URL}/api/duel/${this.matchId}/complete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    playerId: userData.id,
+                    score: roundedScore
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            console.log('✅ Duel complete response:', result);
+            
+            if (result.completed) {
+                // Оба игрока завершили - показываем результаты
+                this.showDuelResults(result);
+            } else {
+                // Ждем второго игрока
+                this.showWaitingForOpponent(roundedScore);
+            }
+            
+        } catch (error) {
+            console.error('❌ Error completing duel:', error);
+            // Продолжаем показывать обычный Game Over экран
+        }
+    }
+    
+    // НОВОЕ: Экран ожидания результата соперника
+    showWaitingForOpponent(myScore) {
+        // Создаем overlay поверх Game Over экрана
+        const overlay = this.add.rectangle(
+            0, 0,
+            CONSTS.WIDTH,
+            CONSTS.HEIGHT,
+            0x000000,
+            0.9
+        ).setOrigin(0, 0).setScrollFactor(0).setDepth(20);
+        
+        // Заголовок
+        this.add.text(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 - 100,
+            '⏳ Waiting for opponent...',
+            {
+                fontSize: '32px',
+                fill: '#FFD700',
+                fontFamily: 'Arial Black',
+                stroke: '#000',
+                strokeThickness: 4
+            }
+        ).setOrigin(0.5).setScrollFactor(0).setDepth(21);
+        
+        // Твой результат
+        this.add.text(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2,
+            `Your score: ${myScore}`,
+            {
+                fontSize: '24px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial'
+            }
+        ).setOrigin(0.5).setScrollFactor(0).setDepth(21);
+        
+        // Анимация точек
+        const dotsText = this.add.text(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 + 60,
+            '.',
+            {
+                fontSize: '48px',
+                fill: '#FFD700',
+                fontFamily: 'Arial Black'
+            }
+        ).setOrigin(0.5).setScrollFactor(0).setDepth(21);
+        
+        let dotCount = 1;
+        const dotsTimer = this.time.addEvent({
+            delay: 500,
+            loop: true,
+            callback: () => {
+                dotCount = (dotCount % 3) + 1;
+                dotsText.setText('.'.repeat(dotCount));
+            }
+        });
+        
+        // Опрос API каждые 3 секунды
+        const checkTimer = this.time.addEvent({
+            delay: 3000,
+            loop: true,
+            callback: async () => {
+                try {
+                    const response = await fetch(`${API_SERVER_URL}/api/duel/${this.matchId}`);
+                    const data = await response.json();
+                    
+                    if (data.duel.status === 'completed') {
+                        // Второй игрок завершил!
+                        dotsTimer.remove();
+                        checkTimer.remove();
+                        
+                        overlay.destroy();
+                        dotsText.destroy();
+                        
+                        const result = {
+                            completed: true,
+                            winner: data.duel.winner,
+                            score1: data.duel.score1,
+                            score2: data.duel.score2
+                        };
+                        
+                        this.showDuelResults(result);
+                    }
+                } catch (error) {
+                    console.error('Error checking duel status:', error);
+                }
+            }
+        });
+        
+        // Кнопка "Back to Menu" (если долго ждать)
+        const backBtn = this.add.rectangle(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 + 140,
+            200,
+            50,
+            0x34495e
+        ).setInteractive({ useHandCursor: true }).setScrollFactor(0).setDepth(21);
+        
+        this.add.text(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 + 140,
+            'Back to Menu',
+            {
+                fontSize: '18px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial'
+            }
+        ).setOrigin(0.5).setScrollFactor(0).setDepth(21);
+        
+        backBtn.on('pointerdown', () => {
+            dotsTimer.remove();
+            checkTimer.remove();
+            this.scene.start('MenuScene');
+        });
+    }
+    
+    // НОВОЕ: Показать результаты дуэли
+    showDuelResults(result) {
+        const userData = getTelegramUserId();
+        const isPlayer1 = result.score1 !== null && result.score1 !== undefined;
+        const myScore = isPlayer1 ? result.score1 : result.score2;
+        const opponentScore = isPlayer1 ? result.score2 : result.score1;
+        
+        let statusText = '';
+        let statusColor = '#95a5a6';
+        
+        if (result.winner === 'draw') {
+            statusText = '🤝 DRAW!';
+            statusColor = '#f39c12';
+        } else if (result.winner === userData.id) {
+            statusText = '🏆 YOU WON!';
+            statusColor = '#2ecc71';
+        } else {
+            statusText = '😔 YOU LOST';
+            statusColor = '#e74c3c';
+        }
+        
+        // Overlay
+        const overlay = this.add.rectangle(
+            0, 0,
+            CONSTS.WIDTH,
+            CONSTS.HEIGHT,
+            0x000000,
+            0.9
+        ).setOrigin(0, 0).setScrollFactor(0).setDepth(25);
+        
+        // Результат
+        this.add.text(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 - 120,
+            statusText,
+            {
+                fontSize: '48px',
+                fill: statusColor,
+                fontFamily: 'Arial Black',
+                stroke: '#000',
+                strokeThickness: 6
+            }
+        ).setOrigin(0.5).setScrollFactor(0).setDepth(26);
+        
+        // Счета
+        this.add.text(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 - 20,
+            `You: ${myScore}`,
+            {
+                fontSize: '28px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial Black'
+            }
+        ).setOrigin(0.5).setScrollFactor(0).setDepth(26);
+        
+        this.add.text(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 + 30,
+            `${this.opponentUsername}: ${opponentScore}`,
+            {
+                fontSize: '28px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial Black'
+            }
+        ).setOrigin(0.5).setScrollFactor(0).setDepth(26);
+        
+        // Кнопки
+        const rematchBtn = this.add.rectangle(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 + 100,
+            200,
+            50,
+            0xFF6B35
+        ).setInteractive({ useHandCursor: true }).setScrollFactor(0).setDepth(26);
+        
+        this.add.text(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 + 100,
+            '🔄 Rematch',
+            {
+                fontSize: '20px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial Black'
+            }
+        ).setOrigin(0.5).setScrollFactor(0).setDepth(26);
+        
+        rematchBtn.on('pointerdown', () => {
+            this.scene.start('DuelHistoryScene');
+        });
+        
+        const menuBtn = this.add.rectangle(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 + 170,
+            200,
+            50,
+            0x34495e
+        ).setInteractive({ useHandCursor: true }).setScrollFactor(0).setDepth(26);
+        
+        this.add.text(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 + 170,
+            '← Menu',
+            {
+                fontSize: '20px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial'
+            }
+        ).setOrigin(0.5).setScrollFactor(0).setDepth(26);
+        
+        menuBtn.on('pointerdown', () => {
+            this.scene.start('MenuScene');
+        });
     }
 
     getStandingPlatform() {
