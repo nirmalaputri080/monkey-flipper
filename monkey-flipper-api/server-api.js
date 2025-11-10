@@ -120,8 +120,8 @@ app.post('/api/duel/create', async (req, res) => {
     `, [matchId, player1Id, player1Username, seed, expiresAt]);
     
     // Формируем ссылки для разных способов отправки
-    const webAppUrl = process.env.WEB_APP_URL || 'https://monkey-flipper.vercel.app';
-    const webAppName = process.env.WEB_APP_NAME || 'game'; // Короткое имя из /newapp
+    const webAppUrl = process.env.WEB_APP_URL || 'https://monkey-flipper-test-key-1.vercel.app';
+    const webAppName = process.env.WEB_APP_NAME || 'monkeytest'; // Короткое имя из /newapp
     
     // Вариант 1: Direct Link через Web App (автоматически открывает игру)
     // https://t.me/botname/appname?startapp=duel_123
