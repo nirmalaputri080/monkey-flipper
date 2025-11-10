@@ -834,8 +834,53 @@ class DuelHistoryScene extends Phaser.Scene {
         acceptBtn.on('pointerover', () => acceptBtn.setFillStyle(0x2ecc71));
         acceptBtn.on('pointerout', () => acceptBtn.setFillStyle(0x27ae60));
         
-        // Контейнер для истории дуэлей
-        this.historyContainer = this.add.container(0, 310);
+        // НОВОЕ: Кнопка "Очистить историю"
+        const clearBtn = this.add.rectangle(
+            CONSTS.WIDTH / 2, 
+            290, 
+            200, 
+            40, 
+            0xe74c3c
+        ).setInteractive({ useHandCursor: true });
+        
+        const clearText = this.add.text(
+            CONSTS.WIDTH / 2, 
+            290, 
+            '🗑️ Clear History', 
+            {
+                fontSize: '16px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial'
+            }
+        ).setOrigin(0.5);
+        
+        clearBtn.on('pointerdown', () => this.confirmClearHistory(userData));
+        clearBtn.on('pointerover', () => clearBtn.setFillStyle(0xc0392b));
+        clearBtn.on('pointerout', () => clearBtn.setFillStyle(0xe74c3c));
+        
+        // НОВОЕ: Создаём зону скролла для истории
+        const scrollZone = this.add.zone(0, 340, CONSTS.WIDTH, CONSTS.HEIGHT - 340)
+            .setOrigin(0, 0)
+            .setInteractive();
+        
+        // Контейнер для истории дуэлей (внутри скролл-зоны)
+        this.historyContainer = this.add.container(0, 340);
+        this.historyScrollY = 0;
+        this.maxScrollY = 0;
+        
+        // Обработка скролла
+        scrollZone.on('wheel', (pointer, deltaX, deltaY) => {
+            this.historyScrollY += deltaY * 0.5;
+            this.historyScrollY = Phaser.Math.Clamp(this.historyScrollY, -this.maxScrollY, 0);
+            this.historyContainer.y = 340 + this.historyScrollY;
+        });
+        
+        // Маска для обрезки содержимого
+        const maskShape = this.make.graphics();
+        maskShape.fillStyle(0xffffff);
+        maskShape.fillRect(0, 340, CONSTS.WIDTH, CONSTS.HEIGHT - 340);
+        this.historyMask = maskShape.createGeometryMask();
+        this.historyContainer.setMask(this.historyMask);
         
         // Загружаем историю
         this.loadDuelHistory(userData.id);
@@ -1349,6 +1394,11 @@ class DuelHistoryScene extends Phaser.Scene {
                 y += 90; // Увеличиваем отступ для 3 строк
             });
             
+            // Рассчитываем максимальный скролл
+            const totalHeight = data.duels.length * 90;
+            const visibleHeight = CONSTS.HEIGHT - 340;
+            this.maxScrollY = Math.max(0, totalHeight - visibleHeight);
+            
         } catch (error) {
             console.error('❌ Error loading duel history:', error);
             this.historyContainer.add(
@@ -1364,6 +1414,119 @@ class DuelHistoryScene extends Phaser.Scene {
                 ).setOrigin(0.5)
             );
         }
+    }
+    
+    // НОВОЕ: Подтверждение очистки истории
+    confirmClearHistory(userData) {
+        // Затемнение
+        const overlay = this.add.rectangle(
+            0, 0, 
+            CONSTS.WIDTH, 
+            CONSTS.HEIGHT, 
+            0x000000, 
+            0.8
+        ).setOrigin(0, 0).setInteractive().setDepth(100);
+        
+        // Диалог
+        const dialog = this.add.rectangle(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2,
+            CONSTS.WIDTH - 80,
+            250,
+            0x2c3e50
+        ).setStrokeStyle(4, 0xe74c3c).setDepth(101);
+        
+        // Предупреждение
+        const warningText = this.add.text(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 - 60,
+            '⚠️ Clear All History?\n\nThis will delete ALL your duel records.\nThis action cannot be undone!',
+            {
+                fontSize: '18px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial',
+                align: 'center',
+                lineSpacing: 8
+            }
+        ).setOrigin(0.5).setDepth(102);
+        
+        // Кнопка "Delete All"
+        const deleteBtn = this.add.rectangle(
+            CONSTS.WIDTH / 2 - 80,
+            CONSTS.HEIGHT / 2 + 60,
+            140,
+            50,
+            0xe74c3c
+        ).setInteractive({ useHandCursor: true }).setDepth(101);
+        
+        const deleteText = this.add.text(
+            CONSTS.WIDTH / 2 - 80,
+            CONSTS.HEIGHT / 2 + 60,
+            '🗑️ Delete All',
+            {
+                fontSize: '16px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial Black'
+            }
+        ).setOrigin(0.5).setDepth(102);
+        
+        deleteBtn.on('pointerdown', async () => {
+            try {
+                // Удаляем все дуэли пользователя
+                const response = await fetch(`${API_SERVER_URL}/api/duel/history/${userData.id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    // Закрываем диалог
+                    overlay.destroy();
+                    dialog.destroy();
+                    warningText.destroy();
+                    deleteBtn.destroy();
+                    deleteText.destroy();
+                    cancelBtn.destroy();
+                    cancelText.destroy();
+                    
+                    // Перезагружаем историю
+                    this.loadDuelHistory(userData.id);
+                } else {
+                    alert('Failed to delete history');
+                }
+            } catch (error) {
+                console.error('Delete error:', error);
+                alert('Error deleting history');
+            }
+        });
+        
+        // Кнопка "Cancel"
+        const cancelBtn = this.add.rectangle(
+            CONSTS.WIDTH / 2 + 80,
+            CONSTS.HEIGHT / 2 + 60,
+            140,
+            50,
+            0x95a5a6
+        ).setInteractive({ useHandCursor: true }).setDepth(101);
+        
+        const cancelText = this.add.text(
+            CONSTS.WIDTH / 2 + 80,
+            CONSTS.HEIGHT / 2 + 60,
+            'Cancel',
+            {
+                fontSize: '16px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial'
+            }
+        ).setOrigin(0.5).setDepth(102);
+        
+        cancelBtn.on('pointerdown', () => {
+            overlay.destroy();
+            dialog.destroy();
+            warningText.destroy();
+            deleteBtn.destroy();
+            deleteText.destroy();
+            cancelBtn.destroy();
+            cancelText.destroy();
+        });
     }
 }
 

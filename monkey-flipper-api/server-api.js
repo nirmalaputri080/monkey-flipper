@@ -335,6 +335,26 @@ app.get('/api/duel/history/:userId', async (req, res) => {
   }
 });
 
+// Удалить всю историю дуэлей игрока
+app.delete('/api/duel/history/:userId', async (req, res) => {
+  const { userId } = req.params;
+  
+  try {
+    const result = await pool.query(
+      'DELETE FROM duels WHERE player1_id = $1 OR player2_id = $1',
+      [userId]
+    );
+    
+    return res.json({ 
+      success: true, 
+      deleted: result.rowCount
+    });
+  } catch (err) {
+    console.error('Delete duel history error', err);
+    return res.status(500).json({ success: false, error: 'DB error' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`API server listening on ${PORT}`);
 });
