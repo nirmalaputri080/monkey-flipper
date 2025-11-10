@@ -483,7 +483,18 @@ class MenuScene extends Phaser.Scene {
     async checkDeepLink() {
         try {
             // Проверяем Telegram WebApp startapp parameter
-            const startParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+            const tg = window.Telegram?.WebApp;
+            const startParam = tg?.initDataUnsafe?.start_param;
+            
+            // ОТЛАДКА: Показываем все параметры
+            console.log('🔍 Checking deep link...');
+            console.log('   Telegram WebApp:', tg ? 'EXISTS' : 'NOT FOUND');
+            console.log('   initDataUnsafe:', tg?.initDataUnsafe);
+            console.log('   start_param:', startParam);
+            
+            // ИСПРАВЛЕНИЕ: В Telegram Mini Apps параметр называется startapp, не start_param
+            // Ссылка: https://t.me/botname?startapp=duel_123
+            // Параметр доступен как: window.Telegram.WebApp.initDataUnsafe.start_param
             
             if (startParam && startParam.startsWith('duel_')) {
                 const matchId = startParam;
@@ -563,6 +574,14 @@ class MenuScene extends Phaser.Scene {
                     });
                 }, 1500);
                 
+            } else {
+                console.log('ℹ️ No deep link found');
+                
+                // НОВОЕ: Если пользователь пришел по ссылке, но параметр не распознан
+                // Показываем подсказку
+                if (tg && !startParam) {
+                    console.log('⚠️ User opened from Telegram but no start_param found');
+                }
             }
         } catch (error) {
             console.error('❌ Deep link error:', error);
@@ -767,8 +786,32 @@ class DuelHistoryScene extends Phaser.Scene {
         challengeBtn.on('pointerover', () => challengeBtn.setFillStyle(0xFF8C5A));
         challengeBtn.on('pointerout', () => challengeBtn.setFillStyle(0xFF6B35));
         
+        // НОВОЕ: Кнопка "Принять вызов" (для ручного ввода Match ID)
+        const acceptBtn = this.add.rectangle(
+            CONSTS.WIDTH / 2, 
+            230, 
+            300, 
+            50, 
+            0x27ae60
+        ).setInteractive({ useHandCursor: true });
+        
+        const acceptText = this.add.text(
+            CONSTS.WIDTH / 2, 
+            230, 
+            '✅ Accept Challenge', 
+            {
+                fontSize: '20px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial Black'
+            }
+        ).setOrigin(0.5);
+        
+        acceptBtn.on('pointerdown', () => this.showAcceptDialog(userData));
+        acceptBtn.on('pointerover', () => acceptBtn.setFillStyle(0x2ecc71));
+        acceptBtn.on('pointerout', () => acceptBtn.setFillStyle(0x27ae60));
+        
         // Контейнер для истории дуэлей
-        this.historyContainer = this.add.container(0, 250);
+        this.historyContainer = this.add.container(0, 310);
         
         // Загружаем историю
         this.loadDuelHistory(userData.id);
@@ -943,6 +986,198 @@ class DuelHistoryScene extends Phaser.Scene {
             dialog.destroy();
             this.children.list.slice(-6).forEach(child => child.destroy());
             this.loadDuelHistory(getTelegramUserId().id);
+        });
+    }
+    
+    // НОВОЕ: Диалог для ручного принятия вызова
+    showAcceptDialog(userData) {
+        // Затемнение фона
+        const overlay = this.add.rectangle(
+            0, 0, 
+            CONSTS.WIDTH, 
+            CONSTS.HEIGHT, 
+            0x000000, 
+            0.7
+        ).setOrigin(0, 0).setInteractive();
+        
+        // Диалоговое окно
+        const dialog = this.add.rectangle(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2,
+            CONSTS.WIDTH - 80,
+            350,
+            0x2c3e50
+        ).setStrokeStyle(4, 0x27ae60);
+        
+        // Заголовок
+        this.add.text(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 - 120,
+            '✅ Accept Challenge',
+            {
+                fontSize: '28px',
+                fill: '#2ecc71',
+                fontFamily: 'Arial Black'
+            }
+        ).setOrigin(0.5);
+        
+        // Инструкция
+        this.add.text(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 - 60,
+            'Enter Match ID from the link:',
+            {
+                fontSize: '18px',
+                fill: '#ecf0f1',
+                fontFamily: 'Arial'
+            }
+        ).setOrigin(0.5);
+        
+        // Создаем поле ввода через HTML input
+        const inputHtml = document.createElement('input');
+        inputHtml.type = 'text';
+        inputHtml.placeholder = 'duel_123456789_abc';
+        inputHtml.style.cssText = `
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 280px;
+            height: 45px;
+            font-size: 16px;
+            padding: 10px;
+            border: 2px solid #27ae60;
+            border-radius: 8px;
+            text-align: center;
+            z-index: 1000;
+        `;
+        document.body.appendChild(inputHtml);
+        inputHtml.focus();
+        
+        // Кнопка "Accept"
+        const acceptBtn = this.add.rectangle(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 + 80,
+            200,
+            50,
+            0x27ae60
+        ).setInteractive({ useHandCursor: true });
+        
+        this.add.text(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 + 80,
+            '✅ Accept',
+            {
+                fontSize: '20px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial Black'
+            }
+        ).setOrigin(0.5);
+        
+        acceptBtn.on('pointerdown', async () => {
+            const matchId = inputHtml.value.trim();
+            
+            if (!matchId || !matchId.startsWith('duel_')) {
+                alert('Invalid Match ID! Must start with "duel_"');
+                return;
+            }
+            
+            // Убираем диалог
+            inputHtml.remove();
+            overlay.destroy();
+            dialog.destroy();
+            this.children.list.slice(-5).forEach(child => child.destroy());
+            
+            // Показываем loading
+            const loadingText = this.add.text(
+                CONSTS.WIDTH / 2,
+                CONSTS.HEIGHT / 2,
+                '⏳ Accepting challenge...',
+                {
+                    fontSize: '24px',
+                    fill: '#FFD700',
+                    fontFamily: 'Arial Black'
+                }
+            ).setOrigin(0.5);
+            
+            try {
+                // Получаем информацию о дуэли
+                const duelResponse = await fetch(`${API_SERVER_URL}/api/duel/${matchId}`);
+                
+                if (!duelResponse.ok) {
+                    throw new Error('Duel not found or expired');
+                }
+                
+                const duelData = await duelResponse.json();
+                const duel = duelData.duel;
+                
+                // Проверяем статус
+                if (duel.status !== 'pending') {
+                    throw new Error('Duel already started or expired');
+                }
+                
+                // Принимаем вызов
+                const acceptResponse = await fetch(`${API_SERVER_URL}/api/duel/${matchId}/accept`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        player2Id: userData.id,
+                        player2Username: userData.username
+                    })
+                });
+                
+                if (!acceptResponse.ok) {
+                    const errorData = await acceptResponse.json();
+                    throw new Error(errorData.error || 'Failed to accept');
+                }
+                
+                const acceptData = await acceptResponse.json();
+                
+                // Успешно принято - запускаем игру
+                loadingText.setText('✅ Challenge accepted! Starting game...');
+                
+                setTimeout(() => {
+                    loadingText.destroy();
+                    this.scene.start('GameScene', {
+                        mode: 'duel',
+                        matchId: matchId,
+                        seed: acceptData.seed,
+                        opponentUsername: duel.player1_username
+                    });
+                }, 1500);
+                
+            } catch (error) {
+                console.error('❌ Accept error:', error);
+                loadingText.destroy();
+                alert(`Failed to accept challenge: ${error.message}`);
+            }
+        });
+        
+        // Кнопка "Cancel"
+        const cancelBtn = this.add.rectangle(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 + 140,
+            200,
+            50,
+            0x95a5a6
+        ).setInteractive({ useHandCursor: true });
+        
+        this.add.text(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 + 140,
+            'Cancel',
+            {
+                fontSize: '18px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial'
+            }
+        ).setOrigin(0.5);
+        
+        cancelBtn.on('pointerdown', () => {
+            inputHtml.remove();
+            overlay.destroy();
+            dialog.destroy();
+            this.children.list.slice(-5).forEach(child => child.destroy());
         });
     }
     
