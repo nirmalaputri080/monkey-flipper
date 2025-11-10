@@ -931,10 +931,24 @@ class DuelHistoryScene extends Phaser.Scene {
             
             const data = await response.json();
             
-            loadingText.destroy();
+            loadingText.setText('✅ Challenge created! Starting game...');
             
-            // Показываем ссылку для отправки
-            this.showShareDialog(data);
+            // ВАЖНО: Сохраняем данные дуэли для показа диалога после игры
+            this.lastCreatedDuel = data;
+            
+            // Автоматически запускаем игру для создателя
+            setTimeout(() => {
+                loadingText.destroy();
+                
+                // Запускаем игру в режиме дуэли для создателя (player1)
+                this.scene.start('GameScene', {
+                    mode: 'duel',
+                    matchId: data.matchId,
+                    seed: data.seed,
+                    isCreator: true, // Флаг что это создатель
+                    opponentUsername: 'Waiting for opponent...'
+                });
+            }, 1000);
             
         } catch (error) {
             console.error('❌ Error creating challenge:', error);
@@ -1627,6 +1641,7 @@ class GameScene extends Phaser.Scene {
             this.matchId = data.matchId;
             this.opponentUsername = data.opponentUsername || 'Opponent';
             this.duelCompleted = false;
+            this.isCreator = data.isCreator || false; // Флаг создателя челленджа
             
             // Инициализируем seeded random для одинаковых платформ
             this.seededRandom = new SeededRandom(this.gameSeed);
@@ -1635,6 +1650,7 @@ class GameScene extends Phaser.Scene {
             console.log('   Match ID:', this.matchId);
             console.log('   Seed:', this.gameSeed);
             console.log('   Opponent:', this.opponentUsername);
+            console.log('   Is Creator:', this.isCreator);
             
         } else if (data && data.mode === '1v1') {
             // Режим 1v1 matchmaking (существующий)
@@ -2776,6 +2792,112 @@ class GameScene extends Phaser.Scene {
             0.9
         ).setOrigin(0, 0).setScrollFactor(0).setDepth(20);
         
+        // Если это создатель челленджа - показываем кнопку Share
+        if (this.isCreator) {
+            // Заголовок
+            this.add.text(
+                CONSTS.WIDTH / 2,
+                CONSTS.HEIGHT / 2 - 150,
+                '✅ Challenge Complete!',
+                {
+                    fontSize: '28px',
+                    fill: '#2ecc71',
+                    fontFamily: 'Arial Black',
+                    stroke: '#000',
+                    strokeThickness: 4
+                }
+            ).setOrigin(0.5).setScrollFactor(0).setDepth(21);
+            
+            // Твой результат
+            this.add.text(
+                CONSTS.WIDTH / 2,
+                CONSTS.HEIGHT / 2 - 80,
+                `Your score: ${myScore}`,
+                {
+                    fontSize: '24px',
+                    fill: '#FFD700',
+                    fontFamily: 'Arial Black'
+                }
+            ).setOrigin(0.5).setScrollFactor(0).setDepth(21);
+            
+            // Информация
+            this.add.text(
+                CONSTS.WIDTH / 2,
+                CONSTS.HEIGHT / 2 - 20,
+                'Now share this challenge\nwith your friend!',
+                {
+                    fontSize: '18px',
+                    fill: '#FFFFFF',
+                    fontFamily: 'Arial',
+                    align: 'center',
+                    lineSpacing: 5
+                }
+            ).setOrigin(0.5).setScrollFactor(0).setDepth(21);
+            
+            // Кнопка "Share in Telegram"
+            const shareBtn = this.add.rectangle(
+                CONSTS.WIDTH / 2,
+                CONSTS.HEIGHT / 2 + 50,
+                280,
+                60,
+                0x0088cc
+            ).setInteractive({ useHandCursor: true }).setScrollFactor(0).setDepth(21);
+            
+            this.add.text(
+                CONSTS.WIDTH / 2,
+                CONSTS.HEIGHT / 2 + 50,
+                '📤 Share in Telegram',
+                {
+                    fontSize: '20px',
+                    fill: '#FFFFFF',
+                    fontFamily: 'Arial Black'
+                }
+            ).setOrigin(0.5).setScrollFactor(0).setDepth(21);
+            
+            shareBtn.on('pointerdown', () => {
+                // Формируем ссылку для шаринга
+                const duelLink = `https://t.me/monkey_test_crypto_bot/monkeytest?startapp=${this.matchId}`;
+                const shareText = `🐵 I challenge you to a duel in Crypto Monkey! My score: ${myScore}. Can you beat it?`;
+                
+                if (window.Telegram?.WebApp) {
+                    window.Telegram.WebApp.openTelegramLink(
+                        `https://t.me/share/url?url=${encodeURIComponent(duelLink)}&text=${encodeURIComponent(shareText)}`
+                    );
+                } else {
+                    // Fallback: копируем ссылку
+                    navigator.clipboard?.writeText(duelLink);
+                    alert('Link copied to clipboard!');
+                }
+            });
+            
+            // Кнопка "Back to Menu"
+            const menuBtn = this.add.rectangle(
+                CONSTS.WIDTH / 2,
+                CONSTS.HEIGHT / 2 + 130,
+                200,
+                50,
+                0x34495e
+            ).setInteractive({ useHandCursor: true }).setScrollFactor(0).setDepth(21);
+            
+            this.add.text(
+                CONSTS.WIDTH / 2,
+                CONSTS.HEIGHT / 2 + 130,
+                '← Back to Menu',
+                {
+                    fontSize: '18px',
+                    fill: '#FFFFFF',
+                    fontFamily: 'Arial'
+                }
+            ).setOrigin(0.5).setScrollFactor(0).setDepth(21);
+            
+            menuBtn.on('pointerdown', () => {
+                this.scene.start('MenuScene');
+            });
+            
+            return; // Не показываем экран ожидания
+        }
+        
+        // Обычный экран ожидания для принявшего челлендж
         // Заголовок
         this.add.text(
             CONSTS.WIDTH / 2,
