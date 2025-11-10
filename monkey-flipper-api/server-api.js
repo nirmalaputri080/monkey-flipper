@@ -119,24 +119,29 @@ app.post('/api/duel/create', async (req, res) => {
       VALUES ($1, $2, $3, $4, $5, 'pending')
     `, [matchId, player1Id, player1Username, seed, expiresAt]);
     
-    // ИСПРАВЛЕНИЕ: Формируем правильную ссылку для Telegram Mini App
-    // Вариант 1: Через Web App URL (если у бота настроен Web App)
-    // https://t.me/botname/appname?startapp=duel_123
-    // Вариант 2: Через share с текстом (универсальный)
+    // Формируем ссылки для разных способов отправки
     const webAppUrl = process.env.WEB_APP_URL || 'https://monkey-flipper.vercel.app';
-    const duelLink = botUsername 
-      ? `https://t.me/${botUsername}?start=${matchId}` // Используем start вместо startapp
-      : `${webAppUrl}?matchId=${matchId}`; // Прямая ссылка на приложение
+    const webAppName = process.env.WEB_APP_NAME || 'game'; // Короткое имя из /newapp
     
-    // Дополнительно: ссылка для шеринга в Telegram
-    const shareLink = `https://t.me/share/url?url=${encodeURIComponent(duelLink)}&text=${encodeURIComponent(`🐵 Join my duel in Crypto Monkey!`)}`;
+    // Вариант 1: Direct Link через Web App (автоматически открывает игру)
+    // https://t.me/botname/appname?startapp=duel_123
+    const directLink = botUsername 
+      ? `https://t.me/${botUsername}/${webAppName}?startapp=${matchId}`
+      : `${webAppUrl}?matchId=${matchId}`;
+    
+    // Вариант 2: Fallback через обычную ссылку (для старых клиентов)
+    const fallbackLink = `${webAppUrl}?matchId=${matchId}`;
+    
+    // Ссылка для шеринга в Telegram
+    const shareLink = `https://t.me/share/url?url=${encodeURIComponent(directLink)}&text=${encodeURIComponent(`🐵 I challenge you to a duel in Crypto Monkey!`)}`;
     
     return res.json({ 
       success: true, 
       matchId, 
       seed,
-      duelLink,
-      shareLink, // Новое: отдельная ссылка для шеринга
+      duelLink: directLink, // Основная ссылка (автоматическая)
+      fallbackLink, // Запасная ссылка (ручная)
+      shareLink, // Ссылка для шеринга
       expiresAt 
     });
   } catch (err) {
