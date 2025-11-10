@@ -809,7 +809,7 @@ class DuelHistoryScene extends Phaser.Scene {
                 body: JSON.stringify({
                     player1Id: userData.id,
                     player1Username: userData.username,
-                    botUsername: 'crypto_monkey_bot' // Замени на имя своего бота
+                    botUsername: 'monkey_test_crypto_bot' // Имя Telegram бота
                 })
             });
             
