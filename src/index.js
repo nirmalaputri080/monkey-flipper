@@ -914,10 +914,10 @@ class DuelHistoryScene extends Phaser.Scene {
             CONSTS.WIDTH - 80,
             400,
             0x2c3e50
-        ).setStrokeStyle(4, 0xFFD700);
+        ).setStrokeStyle(4, 0xFFD700).setDepth(0);
         
         // Заголовок
-        this.add.text(
+        const titleText = this.add.text(
             CONSTS.WIDTH / 2,
             CONSTS.HEIGHT / 2 - 150,
             '✅ Challenge Created!',
@@ -926,10 +926,10 @@ class DuelHistoryScene extends Phaser.Scene {
                 fill: '#FFD700',
                 fontFamily: 'Arial Black'
             }
-        ).setOrigin(0.5);
+        ).setOrigin(0.5).setDepth(1);
         
         // Информация
-        this.add.text(
+        const infoText = this.add.text(
             CONSTS.WIDTH / 2,
             CONSTS.HEIGHT / 2 - 80,
             `Match ID: ${duelData.matchId}\n` +
@@ -941,7 +941,7 @@ class DuelHistoryScene extends Phaser.Scene {
                 align: 'center',
                 lineSpacing: 8
             }
-        ).setOrigin(0.5);
+        ).setOrigin(0.5).setDepth(1);
         
         // Кнопка "Copy Match ID"
         const copyIdBtn = this.add.rectangle(
@@ -950,9 +950,9 @@ class DuelHistoryScene extends Phaser.Scene {
             200,
             45,
             0x9b59b6
-        ).setInteractive({ useHandCursor: true });
+        ).setInteractive({ useHandCursor: true }).setDepth(1);
         
-        this.add.text(
+        const copyIdText = this.add.text(
             CONSTS.WIDTH / 2,
             CONSTS.HEIGHT / 2,
             '📋 Copy Match ID',
@@ -961,7 +961,7 @@ class DuelHistoryScene extends Phaser.Scene {
                 fill: '#FFFFFF',
                 fontFamily: 'Arial Black'
             }
-        ).setOrigin(0.5);
+        ).setOrigin(0.5).setDepth(2);
         
         copyIdBtn.on('pointerdown', () => {
             navigator.clipboard?.writeText(duelData.matchId);
@@ -975,9 +975,9 @@ class DuelHistoryScene extends Phaser.Scene {
             280,
             60,
             0x0088cc
-        ).setInteractive({ useHandCursor: true });
+        ).setInteractive({ useHandCursor: true }).setDepth(1);
         
-        this.add.text(
+        const shareText = this.add.text(
             CONSTS.WIDTH / 2,
             CONSTS.HEIGHT / 2 + 80,
             '📤 Share in Telegram',
@@ -986,17 +986,17 @@ class DuelHistoryScene extends Phaser.Scene {
                 fill: '#FFFFFF',
                 fontFamily: 'Arial Black'
             }
-        ).setOrigin(0.5);
+        ).setOrigin(0.5).setDepth(2);
         
         shareBtn.on('pointerdown', () => {
             // Используем Telegram API для отправки
             if (window.Telegram?.WebApp) {
                 const shareUrl = duelData.duelLink;
-                const shareText = `🐵 I challenge you to a duel in Crypto Monkey! Accept the challenge:`;
+                const shareTxt = `🐵 I challenge you to a duel in Crypto Monkey! Accept the challenge:`;
                 
                 // Открываем диалог выбора контакта в Telegram
                 window.Telegram.WebApp.openTelegramLink(
-                    `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`
+                    `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareTxt)}`
                 );
             } else {
                 // Fallback: копируем ссылку
@@ -1004,9 +1004,17 @@ class DuelHistoryScene extends Phaser.Scene {
                 alert('Link copied to clipboard!');
             }
             
+            // Уничтожаем все элементы диалога
             overlay.destroy();
             dialog.destroy();
-            this.children.list.slice(-6).forEach(child => child.destroy());
+            titleText.destroy();
+            infoText.destroy();
+            copyIdBtn.destroy();
+            copyIdText.destroy();
+            shareBtn.destroy();
+            shareText.destroy();
+            closeBtn.destroy();
+            closeText.destroy();
         });
         
         // Кнопка "Close"
@@ -1016,9 +1024,9 @@ class DuelHistoryScene extends Phaser.Scene {
             200,
             50,
             0x95a5a6
-        ).setInteractive({ useHandCursor: true });
+        ).setInteractive({ useHandCursor: true }).setDepth(1);
         
-        this.add.text(
+        const closeText = this.add.text(
             CONSTS.WIDTH / 2,
             CONSTS.HEIGHT / 2 + 160,
             'Close',
@@ -1027,12 +1035,19 @@ class DuelHistoryScene extends Phaser.Scene {
                 fill: '#FFFFFF',
                 fontFamily: 'Arial'
             }
-        ).setOrigin(0.5);
+        ).setOrigin(0.5).setDepth(2);
         
         closeBtn.on('pointerdown', () => {
             overlay.destroy();
             dialog.destroy();
-            this.children.list.slice(-6).forEach(child => child.destroy());
+            titleText.destroy();
+            infoText.destroy();
+            copyIdBtn.destroy();
+            copyIdText.destroy();
+            shareBtn.destroy();
+            shareText.destroy();
+            closeBtn.destroy();
+            closeText.destroy();
             this.loadDuelHistory(getTelegramUserId().id);
         });
     }
