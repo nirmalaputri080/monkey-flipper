@@ -311,7 +311,14 @@ app.get('/api/duel/history/:userId', async (req, res) => {
   
   try {
     const result = await pool.query(`
-      SELECT * FROM duels 
+      SELECT 
+        *,
+        CASE 
+          WHEN started_at IS NOT NULL AND completed_at IS NOT NULL 
+          THEN EXTRACT(EPOCH FROM (completed_at - started_at))
+          ELSE NULL 
+        END as duration_seconds
+      FROM duels 
       WHERE player1_id = $1 OR player2_id = $1
       ORDER BY created_at DESC
       LIMIT $2

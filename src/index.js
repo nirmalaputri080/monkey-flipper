@@ -1275,11 +1275,19 @@ class DuelHistoryScene extends Phaser.Scene {
             
             // Отображаем историю
             data.duels.forEach((duel, index) => {
-                const y = index * 80;
+                const y = index * 90; // Увеличено с 80 до 90 для 3 строк
                 const isPlayer1 = duel.player1_id === userId;
                 const opponentName = isPlayer1 ? duel.player2_username || 'Waiting...' : duel.player1_username;
                 const myScore = isPlayer1 ? duel.score1 : duel.score2;
                 const opponentScore = isPlayer1 ? duel.score2 : duel.score1;
+                
+                // Форматируем длительность
+                let durationText = '';
+                if (duel.duration_seconds) {
+                    const minutes = Math.floor(duel.duration_seconds / 60);
+                    const seconds = Math.floor(duel.duration_seconds % 60);
+                    durationText = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+                }
                 
                 let statusText = '';
                 let statusColor = '#95a5a6';
@@ -1292,8 +1300,8 @@ class DuelHistoryScene extends Phaser.Scene {
                     statusColor = '#3498db';
                 } else if (duel.status === 'completed') {
                     const won = duel.winner === userId;
-                    statusText = won ? '🏆 Won' : '😔 Lost';
-                    statusColor = won ? '#2ecc71' : '#e74c3c';
+                    statusText = won ? '🏆 Won' : (duel.winner === 'draw' ? '🤝 Draw' : '😔 Lost');
+                    statusColor = won ? '#2ecc71' : (duel.winner === 'draw' ? '#f39c12' : '#e74c3c');
                 } else if (duel.status === 'expired') {
                     statusText = '⏰ Expired';
                     statusColor = '#7f8c8d';
@@ -1304,21 +1312,23 @@ class DuelHistoryScene extends Phaser.Scene {
                     CONSTS.WIDTH / 2,
                     y + 40,
                     CONSTS.WIDTH - 60,
-                    70,
+                    80,
                     0x34495e,
                     0.8
                 ).setStrokeStyle(2, 0x7f8c8d);
                 
-                // Информация о дуэли
+                // Информация о дуэли (3 строки вместо 2)
+                const duelInfo = `vs ${opponentName}\n${statusText} • ${myScore ?? '-'} : ${opponentScore ?? '-'}${durationText ? '\n⏱️ ' + durationText : ''}`;
+                
                 const infoText = this.add.text(
                     40,
-                    y + 20,
-                    `vs ${opponentName}\n${statusText} • ${myScore ?? '-'} : ${opponentScore ?? '-'}`,
+                    y + 15,
+                    duelInfo,
                     {
-                        fontSize: '16px',
+                        fontSize: '14px',
                         fill: '#FFFFFF',
                         fontFamily: 'Arial',
-                        lineSpacing: 5
+                        lineSpacing: 3
                     }
                 );
                 
@@ -1335,6 +1345,8 @@ class DuelHistoryScene extends Phaser.Scene {
                 ).setOrigin(0.5);
                 
                 this.historyContainer.add([row, infoText, status]);
+                
+                y += 90; // Увеличиваем отступ для 3 строк
             });
             
         } catch (error) {
