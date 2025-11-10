@@ -234,17 +234,23 @@ class MenuScene extends Phaser.Scene {
         const userData = getTelegramUserId();
         const isTelegram = window.Telegram?.WebApp?.initDataUnsafe?.user ? '✅' : '❌';
         
+        // ОТЛАДКА: Показываем start_param на экране
+        const tg = window.Telegram?.WebApp;
+        const startParam = tg?.initDataUnsafe?.start_param;
+        const debugInfo = `start_param: ${startParam || 'NONE'}`;
+        
         // Фон для отладочной панели
         const debugBg = this.add.graphics();
         debugBg.fillStyle(0x000000, 0.8);
-        debugBg.fillRoundedRect(10, 10, CONSTS.WIDTH - 20, 100, 10);
+        debugBg.fillRoundedRect(10, 10, CONSTS.WIDTH - 20, 120, 10);
         debugBg.setDepth(20);
         
         // Информация о пользователе
         const debugText = this.add.text(20, 20, 
             `${isTelegram} Telegram SDK\n` +
             `👤 Player: ${userData.username}\n` +
-            `🆔 ID: ${userData.id}`,
+            `🆔 ID: ${userData.id}\n` +
+            `${debugInfo}`,
             { 
                 fontSize: '16px', 
                 fill: '#FFFFFF', 
@@ -492,13 +498,21 @@ class MenuScene extends Phaser.Scene {
             console.log('   initDataUnsafe:', tg?.initDataUnsafe);
             console.log('   start_param:', startParam);
             
-            // ИСПРАВЛЕНИЕ: В Telegram Mini Apps параметр называется startapp, не start_param
-            // Ссылка: https://t.me/botname?startapp=duel_123
-            // Параметр доступен как: window.Telegram.WebApp.initDataUnsafe.start_param
+            // ВАЖНО: Также проверяем альтернативные способы получения параметра
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlStartParam = urlParams.get('tgWebAppStartParam');
+            console.log('   URL tgWebAppStartParam:', urlStartParam);
             
-            if (startParam && startParam.startsWith('duel_')) {
-                const matchId = startParam;
+            // Используем любой найденный параметр
+            const finalParam = startParam || urlStartParam;
+            console.log('   Final param:', finalParam);
+            
+            if (finalParam && finalParam.startsWith('duel_')) {
+                const matchId = finalParam;
                 console.log('🔗 Deep link detected:', matchId);
+                
+                // ОТЛАДКА: Показываем alert чтобы пользователь видел
+                alert(`Deep link found: ${matchId}`);
                 
                 // Показываем loading
                 const loadingBg = this.add.rectangle(
@@ -577,10 +591,13 @@ class MenuScene extends Phaser.Scene {
             } else {
                 console.log('ℹ️ No deep link found');
                 
-                // НОВОЕ: Если пользователь пришел по ссылке, но параметр не распознан
-                // Показываем подсказку
-                if (tg && !startParam) {
+                // ОТЛАДКА: Показываем alert если пользователь открыл из Telegram но параметра нет
+                if (tg && !finalParam) {
                     console.log('⚠️ User opened from Telegram but no start_param found');
+                    
+                    // Показываем все что есть в initDataUnsafe
+                    const debugData = JSON.stringify(tg.initDataUnsafe, null, 2);
+                    console.log('Full initDataUnsafe:', debugData);
                 }
             }
         } catch (error) {
