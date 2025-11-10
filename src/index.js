@@ -223,6 +223,9 @@ class MenuScene extends Phaser.Scene {
     }
 
     create() {
+        // НОВОЕ: Проверка deep link для автоматического принятия дуэли
+        this.checkDeepLink();
+        
         // Фон с растяжкой (stretch) без повторения, как в GameScene
         this.background = this.add.image(0, 0, 'background_img_menu').setOrigin(0, 0);
         this.background.setDisplaySize(CONSTS.WIDTH, CONSTS.HEIGHT);
@@ -254,10 +257,11 @@ class MenuScene extends Phaser.Scene {
         const buttons = [
             { text: 'Start', y: CONSTS.HEIGHT / 2, callback: () => this.scene.start('GameScene') },
             { text: '1v1 Online', y: CONSTS.HEIGHT / 2 + 80, callback: () => this.scene.start('MatchmakingScene') }, // НОВОЕ: 1v1 режим
-            { text: 'Leaderboard', y: CONSTS.HEIGHT / 2 + 160, callback: () => this.openLeaderboard() },
-            { text: 'Shop', y: CONSTS.HEIGHT / 2 + 240, callback: () => this.showShop() }, // НОВОЕ: Кнопка для магазина
+            { text: 'Duels', y: CONSTS.HEIGHT / 2 + 160, callback: () => this.scene.start('DuelHistoryScene') }, // НОВОЕ: История дуэлей
+            { text: 'Leaderboard', y: CONSTS.HEIGHT / 2 + 240, callback: () => this.openLeaderboard() },
+            { text: 'Shop', y: CONSTS.HEIGHT / 2 + 320, callback: () => this.showShop() }, // НОВОЕ: Кнопка для магазина
             {
-                text: 'Exit', y: CONSTS.HEIGHT / 2 + 320, callback: () => { // НОВОЕ: Сдвинул Exit еще ниже
+                text: 'Exit', y: CONSTS.HEIGHT / 2 + 400, callback: () => { // НОВОЕ: Сдвинул Exit еще ниже
                     if (!window.close()) {
                         this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 + 200, 'Please close the tab', { fontSize: '24px', fill: '#F00' }).setOrigin(0.5);
                     }
@@ -474,6 +478,97 @@ class MenuScene extends Phaser.Scene {
         this.shopElements.forEach(element => element.destroy());
         this.shopElements = [];
     }
+    
+    // НОВОЕ: Проверка deep link для автоматического принятия дуэли
+    async checkDeepLink() {
+        try {
+            // Проверяем Telegram WebApp startapp parameter
+            const startParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+            
+            if (startParam && startParam.startsWith('duel_')) {
+                const matchId = startParam;
+                console.log('🔗 Deep link detected:', matchId);
+                
+                // Показываем loading
+                const loadingBg = this.add.rectangle(
+                    0, 0, 
+                    CONSTS.WIDTH, 
+                    CONSTS.HEIGHT, 
+                    0x000000, 
+                    0.8
+                ).setOrigin(0, 0).setDepth(100);
+                
+                const loadingText = this.add.text(
+                    CONSTS.WIDTH / 2,
+                    CONSTS.HEIGHT / 2,
+                    '⏳ Accepting challenge...',
+                    {
+                        fontSize: '24px',
+                        fill: '#FFD700',
+                        fontFamily: 'Arial Black'
+                    }
+                ).setOrigin(0.5).setDepth(101);
+                
+                // Получаем информацию о дуэли
+                const duelResponse = await fetch(`${API_SERVER_URL}/api/duel/${matchId}`);
+                
+                if (!duelResponse.ok) {
+                    throw new Error('Duel not found');
+                }
+                
+                const duelData = await duelResponse.json();
+                const duel = duelData.duel;
+                
+                // Проверяем статус
+                if (duel.status !== 'pending') {
+                    loadingText.setText('❌ Duel already started or expired');
+                    setTimeout(() => {
+                        loadingBg.destroy();
+                        loadingText.destroy();
+                    }, 2000);
+                    return;
+                }
+                
+                // Принимаем вызов
+                const userData = getTelegramUserId();
+                const acceptResponse = await fetch(`${API_SERVER_URL}/api/duel/${matchId}/accept`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        player2Id: userData.id,
+                        player2Username: userData.username
+                    })
+                });
+                
+                if (!acceptResponse.ok) {
+                    const errorData = await acceptResponse.json();
+                    throw new Error(errorData.error || 'Failed to accept');
+                }
+                
+                const acceptData = await acceptResponse.json();
+                
+                // Успешно принято - запускаем игру с seed
+                loadingText.setText('✅ Challenge accepted! Starting game...');
+                
+                setTimeout(() => {
+                    loadingBg.destroy();
+                    loadingText.destroy();
+                    
+                    // Запускаем игру в режиме дуэли
+                    this.scene.start('GameScene', {
+                        mode: 'duel',
+                        matchId: matchId,
+                        seed: acceptData.seed,
+                        opponentUsername: duel.player1_username
+                    });
+                }, 1500);
+                
+            }
+        } catch (error) {
+            console.error('❌ Deep link error:', error);
+            alert(`Failed to accept challenge: ${error.message}`);
+        }
+    }
 }
 
 // ==================== MATCHMAKING SCENE ====================
@@ -621,6 +716,343 @@ class MatchmakingScene extends Phaser.Scene {
         // Очистка при выходе из сцены
         if (this.dotTimer) {
             this.dotTimer.remove();
+        }
+    }
+}
+
+// ==================== DUEL HISTORY SCENE ====================
+// Сцена истории дуэлей и создания вызовов
+class DuelHistoryScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'DuelHistoryScene' });
+    }
+    
+    create() {
+        const userData = getTelegramUserId();
+        
+        // Фон
+        this.add.rectangle(0, 0, CONSTS.WIDTH, CONSTS.HEIGHT, 0x2c3e50)
+            .setOrigin(0, 0);
+        
+        // Заголовок
+        this.add.text(CONSTS.WIDTH / 2, 80, '⚔️ DUEL HISTORY', {
+            fontSize: '48px',
+            fill: '#FFD700',
+            fontFamily: 'Arial Black',
+            stroke: '#000',
+            strokeThickness: 6
+        }).setOrigin(0.5);
+        
+        // Кнопка "Вызвать на дуэль"
+        const challengeBtn = this.add.rectangle(
+            CONSTS.WIDTH / 2, 
+            160, 
+            300, 
+            60, 
+            0xFF6B35
+        ).setInteractive({ useHandCursor: true });
+        
+        const challengeText = this.add.text(
+            CONSTS.WIDTH / 2, 
+            160, 
+            '🎯 Challenge Friend', 
+            {
+                fontSize: '24px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial Black'
+            }
+        ).setOrigin(0.5);
+        
+        challengeBtn.on('pointerdown', () => this.createDuelChallenge(userData));
+        challengeBtn.on('pointerover', () => challengeBtn.setFillStyle(0xFF8C5A));
+        challengeBtn.on('pointerout', () => challengeBtn.setFillStyle(0xFF6B35));
+        
+        // Контейнер для истории дуэлей
+        this.historyContainer = this.add.container(0, 250);
+        
+        // Загружаем историю
+        this.loadDuelHistory(userData.id);
+        
+        // Кнопка назад
+        const backBtn = this.add.rectangle(80, 50, 120, 50, 0x34495e)
+            .setInteractive({ useHandCursor: true });
+        
+        this.add.text(80, 50, '← Back', {
+            fontSize: '20px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial'
+        }).setOrigin(0.5);
+        
+        backBtn.on('pointerdown', () => this.scene.start('MenuScene'));
+        backBtn.on('pointerover', () => backBtn.setFillStyle(0x4a6278));
+        backBtn.on('pointerout', () => backBtn.setFillStyle(0x34495e));
+    }
+    
+    async createDuelChallenge(userData) {
+        try {
+            // Показываем loading
+            const loadingText = this.add.text(
+                CONSTS.WIDTH / 2, 
+                CONSTS.HEIGHT / 2, 
+                '⏳ Creating challenge...', 
+                {
+                    fontSize: '24px',
+                    fill: '#FFD700',
+                    fontFamily: 'Arial'
+                }
+            ).setOrigin(0.5);
+            
+            // Создаем вызов через API
+            const response = await fetch(`${API_SERVER_URL}/api/duel/create`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    player1Id: userData.id,
+                    player1Username: userData.username,
+                    botUsername: 'crypto_monkey_bot' // Замени на имя своего бота
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to create challenge');
+            }
+            
+            const data = await response.json();
+            
+            loadingText.destroy();
+            
+            // Показываем ссылку для отправки
+            this.showShareDialog(data);
+            
+        } catch (error) {
+            console.error('❌ Error creating challenge:', error);
+            alert('Failed to create challenge. Please try again.');
+        }
+    }
+    
+    showShareDialog(duelData) {
+        // Затемнение фона
+        const overlay = this.add.rectangle(
+            0, 0, 
+            CONSTS.WIDTH, 
+            CONSTS.HEIGHT, 
+            0x000000, 
+            0.7
+        ).setOrigin(0, 0).setInteractive();
+        
+        // Диалоговое окно
+        const dialog = this.add.rectangle(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2,
+            CONSTS.WIDTH - 80,
+            400,
+            0x2c3e50
+        ).setStrokeStyle(4, 0xFFD700);
+        
+        // Заголовок
+        this.add.text(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 - 150,
+            '✅ Challenge Created!',
+            {
+                fontSize: '28px',
+                fill: '#FFD700',
+                fontFamily: 'Arial Black'
+            }
+        ).setOrigin(0.5);
+        
+        // Информация
+        this.add.text(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 - 80,
+            `Match ID: ${duelData.matchId.substring(0, 20)}...\n` +
+            `Seed: ${duelData.seed}\n` +
+            `Expires: ${new Date(duelData.expiresAt).toLocaleString()}`,
+            {
+                fontSize: '16px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial',
+                align: 'center',
+                lineSpacing: 10
+            }
+        ).setOrigin(0.5);
+        
+        // Кнопка "Share in Telegram"
+        const shareBtn = this.add.rectangle(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 + 60,
+            280,
+            60,
+            0x0088cc
+        ).setInteractive({ useHandCursor: true });
+        
+        this.add.text(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 + 60,
+            '📤 Share in Telegram',
+            {
+                fontSize: '20px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial Black'
+            }
+        ).setOrigin(0.5);
+        
+        shareBtn.on('pointerdown', () => {
+            // Используем Telegram API для отправки
+            if (window.Telegram?.WebApp) {
+                const shareUrl = duelData.duelLink;
+                const shareText = `🐵 I challenge you to a duel in Crypto Monkey! Accept the challenge:`;
+                
+                // Открываем диалог выбора контакта в Telegram
+                window.Telegram.WebApp.openTelegramLink(
+                    `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`
+                );
+            } else {
+                // Fallback: копируем ссылку
+                navigator.clipboard?.writeText(duelData.duelLink);
+                alert('Link copied to clipboard!');
+            }
+            
+            overlay.destroy();
+            dialog.destroy();
+            this.children.list.slice(-6).forEach(child => child.destroy());
+        });
+        
+        // Кнопка "Close"
+        const closeBtn = this.add.rectangle(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 + 140,
+            200,
+            50,
+            0x95a5a6
+        ).setInteractive({ useHandCursor: true });
+        
+        this.add.text(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 + 140,
+            'Close',
+            {
+                fontSize: '18px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial'
+            }
+        ).setOrigin(0.5);
+        
+        closeBtn.on('pointerdown', () => {
+            overlay.destroy();
+            dialog.destroy();
+            this.children.list.slice(-6).forEach(child => child.destroy());
+            this.loadDuelHistory(getTelegramUserId().id);
+        });
+    }
+    
+    async loadDuelHistory(userId) {
+        try {
+            const response = await fetch(`${API_SERVER_URL}/api/duel/history/${userId}?limit=10`);
+            
+            if (!response.ok) {
+                throw new Error('Failed to load history');
+            }
+            
+            const data = await response.json();
+            
+            // Очищаем контейнер
+            this.historyContainer.removeAll(true);
+            
+            if (data.duels.length === 0) {
+                this.historyContainer.add(
+                    this.add.text(
+                        CONSTS.WIDTH / 2,
+                        100,
+                        'No duels yet. Challenge a friend!',
+                        {
+                            fontSize: '20px',
+                            fill: '#95a5a6',
+                            fontFamily: 'Arial'
+                        }
+                    ).setOrigin(0.5)
+                );
+                return;
+            }
+            
+            // Отображаем историю
+            data.duels.forEach((duel, index) => {
+                const y = index * 80;
+                const isPlayer1 = duel.player1_id === userId;
+                const opponentName = isPlayer1 ? duel.player2_username || 'Waiting...' : duel.player1_username;
+                const myScore = isPlayer1 ? duel.score1 : duel.score2;
+                const opponentScore = isPlayer1 ? duel.score2 : duel.score1;
+                
+                let statusText = '';
+                let statusColor = '#95a5a6';
+                
+                if (duel.status === 'pending') {
+                    statusText = '⏳ Pending';
+                    statusColor = '#f39c12';
+                } else if (duel.status === 'active') {
+                    statusText = '🎮 Active';
+                    statusColor = '#3498db';
+                } else if (duel.status === 'completed') {
+                    const won = duel.winner === userId;
+                    statusText = won ? '🏆 Won' : '😔 Lost';
+                    statusColor = won ? '#2ecc71' : '#e74c3c';
+                } else if (duel.status === 'expired') {
+                    statusText = '⏰ Expired';
+                    statusColor = '#7f8c8d';
+                }
+                
+                // Фон строки
+                const row = this.add.rectangle(
+                    CONSTS.WIDTH / 2,
+                    y + 40,
+                    CONSTS.WIDTH - 60,
+                    70,
+                    0x34495e,
+                    0.8
+                ).setStrokeStyle(2, 0x7f8c8d);
+                
+                // Информация о дуэли
+                const infoText = this.add.text(
+                    40,
+                    y + 20,
+                    `vs ${opponentName}\n${statusText} • ${myScore ?? '-'} : ${opponentScore ?? '-'}`,
+                    {
+                        fontSize: '16px',
+                        fill: '#FFFFFF',
+                        fontFamily: 'Arial',
+                        lineSpacing: 5
+                    }
+                );
+                
+                // Статус
+                const status = this.add.text(
+                    CONSTS.WIDTH - 100,
+                    y + 40,
+                    statusText,
+                    {
+                        fontSize: '14px',
+                        fill: statusColor,
+                        fontFamily: 'Arial Black'
+                    }
+                ).setOrigin(0.5);
+                
+                this.historyContainer.add([row, infoText, status]);
+            });
+            
+        } catch (error) {
+            console.error('❌ Error loading duel history:', error);
+            this.historyContainer.add(
+                this.add.text(
+                    CONSTS.WIDTH / 2,
+                    100,
+                    'Failed to load history',
+                    {
+                        fontSize: '20px',
+                        fill: '#e74c3c',
+                        fontFamily: 'Arial'
+                    }
+                ).setOrigin(0.5)
+            );
         }
     }
 }
@@ -2427,7 +2859,7 @@ const config = {
             // Физика теперь адаптируется к частоте дисплея (60/120/144 Hz)
         },
     },
-    scene: [MenuScene, MatchmakingScene, GameScene]
+    scene: [MenuScene, MatchmakingScene, DuelHistoryScene, GameScene]
 };
 
 // Инициализация
