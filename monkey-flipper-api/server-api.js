@@ -119,16 +119,24 @@ app.post('/api/duel/create', async (req, res) => {
       VALUES ($1, $2, $3, $4, $5, 'pending')
     `, [matchId, player1Id, player1Username, seed, expiresAt]);
     
-    // Формируем ссылку для Telegram
+    // ИСПРАВЛЕНИЕ: Формируем правильную ссылку для Telegram Mini App
+    // Вариант 1: Через Web App URL (если у бота настроен Web App)
+    // https://t.me/botname/appname?startapp=duel_123
+    // Вариант 2: Через share с текстом (универсальный)
+    const webAppUrl = process.env.WEB_APP_URL || 'https://monkey-flipper.vercel.app';
     const duelLink = botUsername 
-      ? `https://t.me/${botUsername}?startapp=${matchId}`
-      : `https://t.me/share/url?url=Duel:${matchId}`;
+      ? `https://t.me/${botUsername}?start=${matchId}` // Используем start вместо startapp
+      : `${webAppUrl}?matchId=${matchId}`; // Прямая ссылка на приложение
+    
+    // Дополнительно: ссылка для шеринга в Telegram
+    const shareLink = `https://t.me/share/url?url=${encodeURIComponent(duelLink)}&text=${encodeURIComponent(`🐵 Join my duel in Crypto Monkey!`)}`;
     
     return res.json({ 
       success: true, 
       matchId, 
       seed,
       duelLink,
+      shareLink, // Новое: отдельная ссылка для шеринга
       expiresAt 
     });
   } catch (err) {

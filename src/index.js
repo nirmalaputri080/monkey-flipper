@@ -498,13 +498,20 @@ class MenuScene extends Phaser.Scene {
             console.log('   initDataUnsafe:', tg?.initDataUnsafe);
             console.log('   start_param:', startParam);
             
-            // ВАЖНО: Также проверяем альтернативные способы получения параметра
+            // ВАЖНО: Проверяем несколько способов получения параметра
             const urlParams = new URLSearchParams(window.location.search);
+            const urlMatchId = urlParams.get('matchId'); // Прямой параметр из URL
             const urlStartParam = urlParams.get('tgWebAppStartParam');
+            const hashMatchId = window.location.hash.includes('duel_') 
+                ? window.location.hash.substring(1) 
+                : null;
+            
+            console.log('   URL matchId:', urlMatchId);
             console.log('   URL tgWebAppStartParam:', urlStartParam);
+            console.log('   Hash matchId:', hashMatchId);
             
             // Используем любой найденный параметр
-            const finalParam = startParam || urlStartParam;
+            const finalParam = startParam || urlStartParam || urlMatchId || hashMatchId;
             console.log('   Final param:', finalParam);
             
             if (finalParam && finalParam.startsWith('duel_')) {
@@ -925,22 +932,46 @@ class DuelHistoryScene extends Phaser.Scene {
         this.add.text(
             CONSTS.WIDTH / 2,
             CONSTS.HEIGHT / 2 - 80,
-            `Match ID: ${duelData.matchId.substring(0, 20)}...\n` +
-            `Seed: ${duelData.seed}\n` +
+            `Match ID: ${duelData.matchId}\n` +
             `Expires: ${new Date(duelData.expiresAt).toLocaleString()}`,
             {
-                fontSize: '16px',
+                fontSize: '14px',
                 fill: '#FFFFFF',
                 fontFamily: 'Arial',
                 align: 'center',
-                lineSpacing: 10
+                lineSpacing: 8
             }
         ).setOrigin(0.5);
+        
+        // Кнопка "Copy Match ID"
+        const copyIdBtn = this.add.rectangle(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2,
+            200,
+            45,
+            0x9b59b6
+        ).setInteractive({ useHandCursor: true });
+        
+        this.add.text(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2,
+            '📋 Copy Match ID',
+            {
+                fontSize: '16px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial Black'
+            }
+        ).setOrigin(0.5);
+        
+        copyIdBtn.on('pointerdown', () => {
+            navigator.clipboard?.writeText(duelData.matchId);
+            alert(`Match ID copied!\n${duelData.matchId}\n\nSend it to your friend!`);
+        });
         
         // Кнопка "Share in Telegram"
         const shareBtn = this.add.rectangle(
             CONSTS.WIDTH / 2,
-            CONSTS.HEIGHT / 2 + 60,
+            CONSTS.HEIGHT / 2 + 80,
             280,
             60,
             0x0088cc
@@ -948,7 +979,7 @@ class DuelHistoryScene extends Phaser.Scene {
         
         this.add.text(
             CONSTS.WIDTH / 2,
-            CONSTS.HEIGHT / 2 + 60,
+            CONSTS.HEIGHT / 2 + 80,
             '📤 Share in Telegram',
             {
                 fontSize: '20px',
@@ -981,7 +1012,7 @@ class DuelHistoryScene extends Phaser.Scene {
         // Кнопка "Close"
         const closeBtn = this.add.rectangle(
             CONSTS.WIDTH / 2,
-            CONSTS.HEIGHT / 2 + 140,
+            CONSTS.HEIGHT / 2 + 160,
             200,
             50,
             0x95a5a6
@@ -989,7 +1020,7 @@ class DuelHistoryScene extends Phaser.Scene {
         
         this.add.text(
             CONSTS.WIDTH / 2,
-            CONSTS.HEIGHT / 2 + 140,
+            CONSTS.HEIGHT / 2 + 160,
             'Close',
             {
                 fontSize: '18px',
