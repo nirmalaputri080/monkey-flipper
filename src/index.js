@@ -1048,19 +1048,45 @@ class DuelHistoryScene extends Phaser.Scene {
         ).setOrigin(0.5).setDepth(2);
         
         shareBtn.on('pointerdown', () => {
-            // Используем Telegram API для отправки
+            // УЛУЧШЕНО: Используем современный Telegram WebApp API
             if (window.Telegram?.WebApp) {
+                const tg = window.Telegram.WebApp;
                 const shareUrl = duelData.duelLink;
-                const shareTxt = `🐵 I challenge you to a duel in Crypto Monkey! Accept the challenge:`;
+                const userData = getTelegramUserId();
+                const shareText = `🐵 ${userData.username || 'I'} challenge you to a duel in Crypto Monkey!\n\nAccept the challenge and prove you're the best! 🏆`;
                 
-                // Открываем диалог выбора контакта в Telegram
-                window.Telegram.WebApp.openTelegramLink(
-                    `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareTxt)}`
-                );
+                // Вариант 1: switchInlineQuery (рекомендуется для ботов)
+                if (tg.switchInlineQuery) {
+                    try {
+                        // Отправляет inline query в выбранный чат
+                        tg.switchInlineQuery(duelData.matchId, ['users', 'groups', 'channels']);
+                        console.log('✅ Используем switchInlineQuery');
+                    } catch (e) {
+                        console.warn('switchInlineQuery недоступен, используем openTelegramLink');
+                        // Fallback на старый метод
+                        tg.openTelegramLink(
+                            `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`
+                        );
+                    }
+                } 
+                // Вариант 2: openTelegramLink (универсальный)
+                else {
+                    tg.openTelegramLink(
+                        `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`
+                    );
+                    console.log('✅ Используем openTelegramLink');
+                }
+                
+                // Показываем подтверждение
+                tg.showPopup({
+                    title: '✅ Challenge Sent!',
+                    message: 'Now playing your game...',
+                    buttons: [{ type: 'ok' }]
+                });
             } else {
-                // Fallback: копируем ссылку
+                // Fallback для веба: копируем ссылку
                 navigator.clipboard?.writeText(duelData.duelLink);
-                alert('Link copied to clipboard!');
+                alert('🔗 Link copied to clipboard!\n\nShare it with your friend to start the duel!');
             }
             
             // Уничтожаем все элементы диалога
@@ -1830,7 +1856,7 @@ class GameScene extends Phaser.Scene {
 
         console.log('Player Y:', playerY, 'Ground Y:', ground.y, 'Ground Half Height:', groundHalfHeight, 'Player Half Height:', playerHalfHeight);
         
-        // ==================== OPPONENT GHOST (1V1 MODE) ====================
+        // ==================== OPPONENT GHOST (1V1 & DUEL MODES) ====================
         if (this.gameMode === '1v1') {
             this.createOpponentGhost(playerY);
             
@@ -1838,6 +1864,23 @@ class GameScene extends Phaser.Scene {
             // Это гарантирует что оппонент увидит нас в правильной позиции
             this.sendPlayerUpdate();
             console.log('📤 Отправлена начальная позиция игрока');
+        } else if (this.gameMode === 'duel') {
+            // НОВОЕ: Создаем ghost для режима дуэли
+            this.createOpponentGhost(playerY);
+            
+            // Инициализируем данные оппонента для duel
+            this.opponentData = {
+                username: this.opponentUsername,
+                x: CONSTS.WIDTH / 2,
+                y: playerY,
+                isAlive: true,
+                score: 0,
+                hasStarted: false // Флаг начала игры оппонентом
+            };
+            
+            // Запускаем polling позиции оппонента
+            this.startDuelPolling();
+            console.log('⚔️ Duel: создан ghost и запущен polling');
         }
     }
     
@@ -2068,6 +2111,100 @@ class GameScene extends Phaser.Scene {
             };
             console.log('📤 Отправляю обновление:', updateData);
             this.socket.emit('playerUpdate', updateData);
+        }
+    }
+    
+    // ==================== DUEL MODE POLLING ====================
+    startDuelPolling() {
+        const userData = getTelegramUserId();
+        
+        // Polling позиции оппонента каждые 500ms
+        this.duelPositionInterval = setInterval(async () => {
+            if (this.gameOver || !this.matchId) {
+                clearInterval(this.duelPositionInterval);
+                return;
+            }
+            
+            try {
+                // Отправляем свою позицию
+                await fetch(`${API_SERVER_URL}/api/duel/${this.matchId}/position`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        playerId: userData.id,
+                        x: this.player.x,
+                        y: this.player.y,
+                        score: Math.round(this.score),
+                        isAlive: !this.gameOver
+                    })
+                });
+                
+                // Получаем позицию оппонента
+                const response = await fetch(`${API_SERVER_URL}/api/duel/${this.matchId}/opponent/${userData.id}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.opponent) {
+                        this.updateDuelOpponent(data.opponent);
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Duel polling error:', error);
+            }
+        }, 500);
+        
+        console.log('⏰ Duel polling started');
+    }
+    
+    updateDuelOpponent(opponentData) {
+        if (!this.opponent || !opponentData) return;
+        
+        // Обновляем данные оппонента
+        this.opponentData.hasStarted = opponentData.hasStarted;
+        this.opponentData.isAlive = opponentData.isAlive;
+        this.opponentData.score = opponentData.score || 0;
+        
+        // Если оппонент еще не начал - показываем неактивную тень
+        if (!opponentData.hasStarted) {
+            this.opponent.setVisible(true);
+            this.opponent.setAlpha(0.2);
+            this.opponent.setTint(0x555555); // Темно-серый
+            // Держим на стартовой позиции
+            return;
+        }
+        
+        // Оппонент начал игру - активируем тень
+        if (!this.opponentData.wasActive) {
+            this.opponentData.wasActive = true;
+            this.opponent.setAlpha(0.6);
+            this.opponent.setTint(0xFF6B6B); // Красноватый
+            console.log('✅ Оппонент начал игру!');
+        }
+        
+        // Обновляем позицию оппонента
+        if (opponentData.x !== null && opponentData.y !== null) {
+            this.opponent.setVisible(true);
+            
+            // Если оппонент мертв - показываем как серый и неподвижный
+            if (!opponentData.isAlive) {
+                this.opponent.setAlpha(0.3);
+                this.opponent.setTint(0x888888);
+                // Не обновляем позицию - оставляем на месте падения
+                return;
+            }
+            
+            // Плавное обновление позиции
+            this.tweens.add({
+                targets: this.opponent,
+                x: opponentData.x,
+                y: opponentData.y,
+                duration: 400,
+                ease: 'Linear'
+            });
+            
+            // Обновляем текст счета оппонента
+            if (this.opponentScoreText) {
+                this.opponentScoreText.setText(`${opponentData.score || 0}`);
+            }
         }
     }
     
@@ -2744,6 +2881,12 @@ class GameScene extends Phaser.Scene {
     async completeDuel() {
         if (this.duelCompleted) return; // Защита от двойного вызова
         this.duelCompleted = true;
+        
+        // НОВОЕ: Останавливаем polling позиций
+        if (this.duelPositionInterval) {
+            clearInterval(this.duelPositionInterval);
+            console.log('⏰ Duel polling stopped');
+        }
         
         const userData = getTelegramUserId();
         const roundedScore = Math.round(this.score);

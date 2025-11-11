@@ -41,6 +41,14 @@ const pool = new Pool({
         player2_username VARCHAR(255),
         score1 INTEGER,
         score2 INTEGER,
+        player1_x FLOAT,
+        player1_y FLOAT,
+        player2_x FLOAT,
+        player2_y FLOAT,
+        player1_alive BOOLEAN DEFAULT true,
+        player2_alive BOOLEAN DEFAULT true,
+        player1_last_update TIMESTAMP,
+        player2_last_update TIMESTAMP,
         winner VARCHAR(255),
         status VARCHAR(50) DEFAULT 'pending',
         seed INTEGER NOT NULL,
@@ -354,6 +362,126 @@ app.delete('/api/duel/history/:userId', async (req, res) => {
     return res.status(500).json({ success: false, error: 'DB error' });
   }
 });
+
+// Обновить позицию игрока в дуэли
+app.post('/api/duel/:matchId/position', async (req, res) => {
+  const { matchId } = req.params;
+  const { playerId, x, y, score, isAlive } = req.body;
+  
+  if (!playerId || typeof x !== 'number' || typeof y !== 'number') {
+    return res.status(400).json({ success: false, error: 'playerId, x, y required' });
+  }
+  
+  try {
+    const result = await pool.query('SELECT * FROM duels WHERE match_id = $1', [matchId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Duel not found' });
+    }
+    
+    const duel = result.rows[0];
+    const isPlayer1 = duel.player1_id === playerId;
+    const isPlayer2 = duel.player2_id === playerId;
+    
+    if (!isPlayer1 && !isPlayer2) {
+      return res.status(400).json({ success: false, error: 'Player not in this duel' });
+    }
+    
+    // Обновляем позицию
+    if (isPlayer1) {
+      await pool.query(`
+        UPDATE duels 
+        SET player1_x = $1, player1_y = $2, player1_alive = $3, score1 = $4, player1_last_update = NOW()
+        WHERE match_id = $5
+      `, [x, y, isAlive !== false, score || 0, matchId]);
+    } else {
+      await pool.query(`
+        UPDATE duels 
+        SET player2_x = $1, player2_y = $2, player2_alive = $3, score2 = $4, player2_last_update = NOW()
+        WHERE match_id = $5
+      `, [x, y, isAlive !== false, score || 0, matchId]);
+    }
+    
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('Update position error', err);
+    return res.status(500).json({ success: false, error: 'DB error' });
+  }
+});
+
+// Получить позицию оппонента в дуэли
+app.get('/api/duel/:matchId/opponent/:playerId', async (req, res) => {
+  const { matchId, playerId } = req.params;
+  
+  try {
+    const result = await pool.query('SELECT * FROM duels WHERE match_id = $1', [matchId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Duel not found' });
+    }
+    
+    const duel = result.rows[0];
+    const isPlayer1 = duel.player1_id === playerId;
+    const isPlayer2 = duel.player2_id === playerId;
+    
+    if (!isPlayer1 && !isPlayer2) {
+      return res.status(400).json({ success: false, error: 'Player not in this duel' });
+    }
+    
+    // Возвращаем данные оппонента
+    if (isPlayer1) {
+      return res.json({
+        success: true,
+        opponent: {
+          id: duel.player2_id,
+          username: duel.player2_username,
+          x: duel.player2_x,
+          y: duel.player2_y,
+          score: duel.score2,
+          isAlive: duel.player2_alive,
+          lastUpdate: duel.player2_last_update,
+          hasStarted: duel.player2_id !== null && duel.status === 'active'
+        }
+      });
+    } else {
+      return res.json({
+        success: true,
+        opponent: {
+          id: duel.player1_id,
+          username: duel.player1_username,
+          x: duel.player1_x,
+          y: duel.player1_y,
+          score: duel.score1,
+          isAlive: duel.player1_alive,
+          lastUpdate: duel.player1_last_update,
+          hasStarted: true // player1 всегда начинает первым
+        }
+      });
+    }
+  } catch (err) {
+    console.error('Get opponent position error', err);
+    return res.status(500).json({ success: false, error: 'DB error' });
+  }
+});
+
+// Фоновая задача: аннулировать истекшие дуэли (запускается каждый час)
+setInterval(async () => {
+  try {
+    const result = await pool.query(`
+      UPDATE duels 
+      SET status = 'expired', winner = player1_id, completed_at = NOW()
+      WHERE status = 'pending' 
+      AND expires_at < NOW()
+      RETURNING match_id
+    `);
+    
+    if (result.rowCount > 0) {
+      console.log(`⏰ Аннулировано ${result.rowCount} истекших дуэлей:`, result.rows.map(r => r.match_id));
+    }
+  } catch (err) {
+    console.error('Auto-expire duels error', err);
+  }
+}, 60 * 60 * 1000); // Каждый час
 
 app.listen(PORT, () => {
   console.log(`API server listening on ${PORT}`);
