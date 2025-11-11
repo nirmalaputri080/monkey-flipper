@@ -63,7 +63,39 @@ const pool = new Pool({
       CREATE INDEX IF NOT EXISTS idx_duels_created ON duels(created_at DESC);
     `);
     
-    console.log('✅ DB ready (player_scores + duels)');
+    // Миграция: добавляем новые колонки в существующую таблицу duels (если их нет)
+    await pool.query(`
+      DO $$ 
+      BEGIN
+        -- Добавляем колонки для позиций игроков
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='duels' AND column_name='player1_x') THEN
+          ALTER TABLE duels ADD COLUMN player1_x FLOAT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='duels' AND column_name='player1_y') THEN
+          ALTER TABLE duels ADD COLUMN player1_y FLOAT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='duels' AND column_name='player2_x') THEN
+          ALTER TABLE duels ADD COLUMN player2_x FLOAT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='duels' AND column_name='player2_y') THEN
+          ALTER TABLE duels ADD COLUMN player2_y FLOAT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='duels' AND column_name='player1_alive') THEN
+          ALTER TABLE duels ADD COLUMN player1_alive BOOLEAN DEFAULT true;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='duels' AND column_name='player2_alive') THEN
+          ALTER TABLE duels ADD COLUMN player2_alive BOOLEAN DEFAULT true;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='duels' AND column_name='player1_last_update') THEN
+          ALTER TABLE duels ADD COLUMN player1_last_update TIMESTAMP;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='duels' AND column_name='player2_last_update') THEN
+          ALTER TABLE duels ADD COLUMN player2_last_update TIMESTAMP;
+        END IF;
+      END $$;
+    `);
+    
+    console.log('✅ DB ready (player_scores + duels + migrations applied)');
   } catch (err) {
     console.error('DB setup error', err);
   }
