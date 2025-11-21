@@ -216,6 +216,8 @@ class MenuScene extends Phaser.Scene {
         super({ key: 'MenuScene' });
         this.scoreBoardElements = []; // Массив для элементов экрана рекордов
         this.shopElements = []; // НОВОЕ: Массив для элементов экрана магазина
+        this.monkeyCoins = 0; // НОВОЕ: Баланс Monkey Coins
+        this.coinsText = null; // НОВОЕ: Текст для отображения баланса
     }
 
     preload() {
@@ -244,7 +246,7 @@ class MenuScene extends Phaser.Scene {
         // Фон для отладочной панели
         const debugBg = this.add.graphics();
         debugBg.fillStyle(0x000000, 0.8);
-        debugBg.fillRoundedRect(10, 10, CONSTS.WIDTH - 20, 120, 10);
+        debugBg.fillRoundedRect(10, 10, CONSTS.WIDTH - 20, 145, 10); // Увеличено до 145 для монет
         debugBg.setDepth(20);
         
         // Информация о пользователе
@@ -260,6 +262,21 @@ class MenuScene extends Phaser.Scene {
                 lineSpacing: 5
             }
         ).setDepth(21);
+        
+        // НОВОЕ: Отображение баланса Monkey Coins
+        this.coinsText = this.add.text(20, 115, 
+            `💰 Loading coins...`, 
+            { 
+                fontSize: '18px', 
+                fill: '#FFD700', 
+                fontFamily: 'Arial Black',
+                stroke: '#000000',
+                strokeThickness: 3
+            }
+        ).setDepth(21);
+        
+        // НОВОЕ: Загружаем баланс асинхронно
+        this.loadMonkeyCoins(userData.id);
 
         // Кнопки (увеличили расстояние между ними)
         const buttons = [
@@ -320,156 +337,35 @@ class MenuScene extends Phaser.Scene {
         // Пустой метод для обратной совместимости
     }
 
-    // НОВОЕ: Метод для показа экрана магазина
+    // НОВОЕ: Открыть магазин (ShopScene)
     showShop() {
-        // Загружаем валюту из localStorage
-        let bananas = parseInt(localStorage.getItem('bananas')) || 0;
-        let coins = parseInt(localStorage.getItem('coins')) || 0;
-
-        // Динамическая высота для магазина (для скинов, бустов и заработка)
-        const shopHeight = 500;
-        const shopWidth = 400;
-
-        // Фон для Shop
-        const shopBg = this.add.graphics();
-        shopBg.fillStyle(0x000000, 0.7);
-        shopBg.fillRoundedRect(CONSTS.WIDTH / 2 - shopWidth / 2, CONSTS.HEIGHT / 2 - shopHeight / 2, shopWidth, shopHeight, 15);
-        shopBg.setDepth(14).setAlpha(0).setScale(0);
-        this.shopElements.push(shopBg);
-
-        // Тень
-        const shadowGraphics = this.add.graphics();
-        shadowGraphics.fillStyle(0x000000, 0.5);
-        shadowGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - shopWidth / 2 + 5, CONSTS.HEIGHT / 2 - shopHeight / 2 + 5, shopWidth, shopHeight, 15);
-        shadowGraphics.setDepth(13).setAlpha(0).setScale(0);
-        this.shopElements.push(shadowGraphics);
-
-        // Заголовок
-        const titleText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 30, 'Shop', { fontSize: '32px', fill: '#FFFFFF', fontFamily: 'Arial Black', stroke: '#000000', strokeThickness: 4, align: 'center' }).setOrigin(0.5).setDepth(15).setAlpha(0).setScale(0);
-        this.shopElements.push(titleText);
-
-        // Отображение валюты
-        const bananasText = this.add.text(CONSTS.WIDTH / 2 - 100, CONSTS.HEIGHT / 2 - shopHeight / 2 + 70, `Bananas: ${bananas}`, { fontSize: '24px', fill: '#FFFFFF' }).setOrigin(0.5).setDepth(15).setAlpha(0).setScale(0);
-        this.shopElements.push(bananasText);
-
-        const coinsText = this.add.text(CONSTS.WIDTH / 2 + 100, CONSTS.HEIGHT / 2 - shopHeight / 2 + 70, `Coins: ${coins}`, { fontSize: '24px', fill: '#FFFFFF' }).setOrigin(0.5).setDepth(15).setAlpha(0).setScale(0);
-        this.shopElements.push(coinsText);
-
-        // Секция заработка бананов (моки)
-        const dailyButton = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 110, 'Daily Quest (+50 Bananas)', { fontSize: '20px', fill: '#FFFFFF' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(15).setAlpha(0).setScale(0);
-        dailyButton.on('pointerdown', () => {
-            bananas += 50;
-            localStorage.setItem('bananas', bananas);
-            bananasText.setText(`Bananas: ${bananas}`);
-        });
-        this.shopElements.push(dailyButton);
-
-        const adButton = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 140, 'Watch Ad (+100 Bananas)', { fontSize: '20px', fill: '#FFFFFF' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(15).setAlpha(0).setScale(0);
-        adButton.on('pointerdown', () => {
-            bananas += 100;
-            localStorage.setItem('bananas', bananas);
-            bananasText.setText(`Bananas: ${bananas}`);
-        });
-        this.shopElements.push(adButton);
-
-        const buyCoinsButton = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 170, 'Buy Coins (+100 for real, mock)', { fontSize: '20px', fill: '#FFFFFF' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(15).setAlpha(0).setScale(0);
-        buyCoinsButton.on('pointerdown', () => {
-            coins += 100;
-            localStorage.setItem('coins', coins);
-            coinsText.setText(`Coins: ${coins}`);
-        });
-        this.shopElements.push(buyCoinsButton);
-
-        // Секция скинов (моки)
-        const skin1Button = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 210, 'Normal skin (100 Bananas)', { fontSize: '20px', fill: '#FFFFFF' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(15).setAlpha(0).setScale(0);
-        skin1Button.on('pointerdown', () => {
-            if (bananas >= 100) {
-                bananas -= 100;
-                localStorage.setItem('bananas', bananas);
-                bananasText.setText(`Bananas: ${bananas}`);
-                console.log('Normal skin purchased and applied (mock)');
-                // Here you can add the logic to apply the skin in GameScene, but for now it's a mock
-            }
-        });
-        this.shopElements.push(skin1Button);
-
-        const skin2Button = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 240, 'Exclusive skin (500 Bananas)', { fontSize: '20px', fill: '#FFFFFF' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(15).setAlpha(0).setScale(0);
-        skin2Button.on('pointerdown', () => {
-            if (bananas >= 500) {
-                bananas -= 500;
-                localStorage.setItem('bananas', bananas);
-                bananasText.setText(`Bananas: ${bananas}`);
-                console.log('Exclusive skin purchased and applied (mock)');
-            }
-        });
-        this.shopElements.push(skin2Button);
-
-        // Секция бустов
-        const rocketButton = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 280, 'Rocket (50 Bananas)', { fontSize: '20px', fill: '#FFFFFF' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(15).setAlpha(0).setScale(0);
-        rocketButton.on('pointerdown', () => {
-            if (bananas >= 50) {
-                bananas -= 50;
-                let rockets = parseInt(localStorage.getItem('rockets')) || 0;
-                rockets += 1;
-                localStorage.setItem('bananas', bananas);
-                localStorage.setItem('rockets', rockets);
-                bananasText.setText(`Bananas: ${bananas}`);
-            }
-        });
-        this.shopElements.push(rocketButton);
-
-        const lifeButton = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - shopHeight / 2 + 310, 'Extra Life (20 Coins, max 3)', { fontSize: '20px', fill: '#FFFFFF' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(15).setAlpha(0).setScale(0);
-        lifeButton.on('pointerdown', () => {
-            let extraLives = parseInt(localStorage.getItem('extraLives')) || 0;
-            if (coins >= 20 && extraLives < 3) {
-                coins -= 20;
-                extraLives += 1;
-                localStorage.setItem('coins', coins);
-                localStorage.setItem('extraLives', extraLives);
-                coinsText.setText(`Монеты: ${coins}`);
-            }
-        });
-        this.shopElements.push(lifeButton);
-
-        // Кнопка "Назад"
-        const backGraphics = this.add.graphics().setDepth(15);
-        backGraphics.fillStyle(0xFFFFFF, 1);
-        backGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 60, CONSTS.HEIGHT / 2 + shopHeight / 2 - 60, 120, 50, 10);
-        backGraphics.setAlpha(0).setScale(0);
-        this.shopElements.push(backGraphics);
-
-        const backText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 + shopHeight / 2 - 35, 'Back', { fontSize: '24px', fill: '#000', fontFamily: 'Arial' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(16).setAlpha(0).setScale(0);
-        this.shopElements.push(backText);
-
-        backText.on('pointerdown', () => {
-            this.hideShop();
-        });
-
-        // Анимация появления
-        this.tweens.add({
-            targets: [shopBg, shadowGraphics, backGraphics],
-            scale: { from: 0, to: 1 },
-            alpha: { from: 0, to: 1 },
-            duration: 800,
-            ease: 'Power2'
-        });
-
-        this.tweens.add({
-            targets: [titleText, bananasText, coinsText, dailyButton, adButton, buyCoinsButton, skin1Button, skin2Button, rocketButton, lifeButton, backText],
-            scale: { from: 0, to: 1 },
-            alpha: { from: 0, to: 1 },
-            duration: 800,
-            delay: 400,
-            ease: 'Power2'
-        });
-    }
-
-    // НОВОЕ: Метод для скрытия экрана магазина
-    hideShop() {
-        this.shopElements.forEach(element => element.destroy());
-        this.shopElements = [];
+        console.log('🛒 Opening shop...');
+        this.scene.start('ShopScene');
     }
     
+    // НОВОЕ: Загрузка баланса Monkey Coins
+    async loadMonkeyCoins(userId) {
+        try {
+            const response = await fetch(`${API_SERVER_URL}/api/wallet/${userId}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                this.monkeyCoins = data.wallet.monkeyCoin || 0;
+                if (this.coinsText) {
+                    this.coinsText.setText(`💰 ${this.monkeyCoins} Monkey Coins`);
+                }
+                console.log(`✅ Loaded ${this.monkeyCoins} Monkey Coins`);
+            } else {
+                throw new Error('Failed to load wallet');
+            }
+        } catch (error) {
+            console.error('❌ Error loading Monkey Coins:', error);
+            if (this.coinsText) {
+                this.coinsText.setText(`💰 0 Monkey Coins`);
+            }
+        }
+    }
+
     // НОВОЕ: Проверка deep link для автоматического принятия дуэли
     async checkDeepLink() {
         try {
@@ -748,6 +644,184 @@ class LeaderboardScene extends Phaser.Scene {
             fill: '#AAAAAA',
             fontFamily: 'Arial'
         }).setOrigin(0.5);
+    }
+}
+
+// ==================== SHOP SCENE ====================
+// Магазин для покупки скинов и бустов за Monkey Coins
+class ShopScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'ShopScene' });
+        this.monkeyCoins = 0;
+        this.userData = null;
+        this.coinsText = null;
+    }
+    
+    create() {
+        this.userData = getTelegramUserId();
+        
+        // Фон
+        this.background = this.add.image(0, 0, 'background_img').setOrigin(0, 0);
+        this.background.setDisplaySize(CONSTS.WIDTH, CONSTS.HEIGHT);
+        
+        // Заголовок
+        this.add.text(CONSTS.WIDTH / 2, 60, '🛒 SHOP', {
+            fontSize: '40px',
+            fill: '#FFD700',
+            fontFamily: 'Arial Black',
+            stroke: '#000000',
+            strokeThickness: 6
+        }).setOrigin(0.5);
+        
+        // Баланс
+        this.coinsText = this.add.text(CONSTS.WIDTH / 2, 120, '💰 Loading...', {
+            fontSize: '24px',
+            fill: '#00FF00',
+            fontFamily: 'Arial Black',
+            stroke: '#000000',
+            strokeThickness: 3
+        }).setOrigin(0.5);
+        
+        // Кнопка "Назад"
+        this.createBackButton();
+        
+        // Загружаем баланс и создаем товары
+        this.loadBalance();
+    }
+    
+    createBackButton() {
+        const buttonY = CONSTS.HEIGHT - 50;
+        
+        const backGraphics = this.add.graphics();
+        backGraphics.fillStyle(0x2196F3, 1);
+        backGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 80, buttonY - 22, 160, 44, 8);
+        
+        const backZone = this.add.rectangle(CONSTS.WIDTH / 2, buttonY, 160, 44, 0x000000, 0)
+            .setInteractive({ useHandCursor: true });
+        
+        const backText = this.add.text(CONSTS.WIDTH / 2, buttonY, '← Back', {
+            fontSize: '24px',
+            fill: '#FFF',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
+        
+        backZone.on('pointerdown', () => {
+            console.log('🔙 Back to menu');
+            this.scene.start('MenuScene');
+        });
+    }
+    
+    async loadBalance() {
+        try {
+            const response = await fetch(`${API_SERVER_URL}/api/wallet/${this.userData.id}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                this.monkeyCoins = data.wallet.monkeyCoin || 0;
+                this.coinsText.setText(`💰 ${this.monkeyCoins} Monkey Coins`);
+                this.createShopItems();
+            } else {
+                throw new Error('Failed to load wallet');
+            }
+        } catch (error) {
+            console.error('❌ Error loading balance:', error);
+            this.coinsText.setText(`💰 0 Monkey Coins`);
+            this.createShopItems();
+        }
+    }
+    
+    createShopItems() {
+        const items = [
+            { name: '🎨 Golden Skin', price: 100, id: 'skin_golden', description: 'Shine like gold!' },
+            { name: '🔥 Fire Skin', price: 150, id: 'skin_fire', description: 'Burn the platforms!' },
+            { name: '⚡ Speed Boost', price: 50, id: 'boost_speed', description: '+20% speed for 1 game' },
+            { name: '🛡️ Shield', price: 75, id: 'boost_shield', description: 'Protect from 1 death' },
+            { name: '💎 2x Coins', price: 200, id: 'boost_2x', description: 'Double coins for 5 games' },
+            { name: '🍌 +1000 Score', price: 30, id: 'boost_score', description: 'Instant +1000 points' }
+        ];
+        
+        const startY = 180;
+        const rowHeight = 80;
+        const itemsPerPage = 6;
+        
+        items.slice(0, itemsPerPage).forEach((item, index) => {
+            const y = startY + index * rowHeight;
+            
+            // Фон товара
+            const itemBg = this.add.graphics();
+            itemBg.fillStyle(0x222222, 0.8);
+            itemBg.fillRoundedRect(30, y - 30, CONSTS.WIDTH - 60, 70, 10);
+            
+            // Название и описание
+            this.add.text(45, y - 15, item.name, {
+                fontSize: '20px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial Black'
+            });
+            
+            this.add.text(45, y + 10, item.description, {
+                fontSize: '14px',
+                fill: '#AAAAAA',
+                fontFamily: 'Arial'
+            });
+            
+            // Кнопка покупки
+            const canAfford = this.monkeyCoins >= item.price;
+            const buttonColor = canAfford ? 0x4CAF50 : 0x666666;
+            
+            const buyButton = this.add.graphics();
+            buyButton.fillStyle(buttonColor, 1);
+            buyButton.fillRoundedRect(CONSTS.WIDTH - 140, y - 20, 110, 40, 8);
+            
+            const buyZone = this.add.rectangle(CONSTS.WIDTH - 85, y, 110, 40, 0x000000, 0)
+                .setInteractive({ useHandCursor: canAfford });
+            
+            const buyText = this.add.text(CONSTS.WIDTH - 85, y, 
+                canAfford ? `Buy ${item.price}💰` : `${item.price}💰`, {
+                fontSize: '16px',
+                fill: canAfford ? '#FFF' : '#999',
+                fontFamily: 'Arial Black'
+            }).setOrigin(0.5);
+            
+            if (canAfford) {
+                buyZone.on('pointerdown', () => {
+                    this.buyItem(item);
+                });
+            }
+        });
+        
+        // Информация внизу
+        this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT - 100, 
+            'Earn Monkey Coins by playing!', {
+            fontSize: '16px',
+            fill: '#AAAAAA',
+            fontFamily: 'Arial'
+        }).setOrigin(0.5);
+    }
+    
+    async buyItem(item) {
+        console.log(`💳 Attempting to buy: ${item.name} for ${item.price} coins`);
+        
+        // Пока просто показываем уведомление (позже добавим API)
+        const notification = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2, 
+            `✅ Purchased ${item.name}!\n(Coming soon: actual purchase)`, {
+            fontSize: '20px',
+            fill: '#00FF00',
+            fontFamily: 'Arial Black',
+            align: 'center',
+            backgroundColor: '#000000',
+            padding: { x: 20, y: 15 }
+        }).setOrigin(0.5).setDepth(100);
+        
+        // Анимация уведомления
+        this.tweens.add({
+            targets: notification,
+            alpha: { from: 1, to: 0 },
+            y: { from: CONSTS.HEIGHT / 2, to: CONSTS.HEIGHT / 2 - 100 },
+            duration: 2000,
+            ease: 'Power2',
+            onComplete: () => notification.destroy()
+        });
     }
 }
 
@@ -4057,7 +4131,7 @@ const config = {
             // Физика теперь адаптируется к частоте дисплея (60/120/144 Hz)
         },
     },
-    scene: [MenuScene, LeaderboardScene, MatchmakingScene, DuelHistoryScene, GameScene]
+    scene: [MenuScene, LeaderboardScene, ShopScene, MatchmakingScene, DuelHistoryScene, GameScene]
 };
 
 // Инициализация
