@@ -918,7 +918,15 @@ app.post('/api/shop/purchase', async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Purchase error', err);
-    return res.status(500).json({ success: false, error: 'DB error' });
+    console.error('Purchase error details:', {
+      message: err.message,
+      code: err.code,
+      detail: err.detail,
+      userId,
+      itemId,
+      price
+    });
+    return res.status(500).json({ success: false, error: 'DB error', details: err.message });
   } finally {
     client.release();
   }
