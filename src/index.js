@@ -2125,21 +2125,20 @@ class GameScene extends Phaser.Scene {
         
         // ФИКС: Маленький хитбокс ТОЛЬКО В ОБЛАСТИ НОГ (внизу спрайта)
         // Оригинал текстуры: 124x120, после scale(0.7) = 86.8x84
-        // Задача: круг должен быть в самом низу спрайта (у ног)
+        // На текстуре ноги начинаются примерно с Y=90 (75% от высоты)
         
         const displayW = this.player.displayWidth;   // 86.8
         const displayH = this.player.displayHeight;  // 84
         
-        // Радиус круга - 35% от ширины (маленький круг для ног)
-        const radius = displayW * 0.35;  
+        // Радиус круга - 40% от ширины (для ступней)
+        const radius = displayW * 0.4;  
         
         // offsetX - центрируем круг по горизонтали
         const offsetX = (displayW - radius * 2) / 2;
         
-        // offsetY - прижимаем к самому низу спрайта
-        // offset считается от TOP-LEFT угла body, поэтому:
-        // нужно: displayHeight - диаметр круга
-        const offsetY = displayH - radius * 2;
+        // offsetY - позиция 75% от верха (там начинаются ноги)
+        // offset считается от TOP-LEFT угла body
+        const offsetY = displayH * 0.70; // 70% от высоты = область ног/ступней
         
         this.player.body.setCircle(radius, offsetX, offsetY);
         
