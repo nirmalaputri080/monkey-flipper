@@ -2922,19 +2922,27 @@ class GameScene extends Phaser.Scene {
 
     handlePlayerPlatformCollision(playerObj, platformObj) {
     const player = playerObj; // Упрощаем для удобства
-    // НОВОЕ: Обработка падения на землю (touching.down + isGround + groundAppeared)
-    if (platformObj.isGround && player.body.touching.down && this.groundAppeared) {
-        console.log('💥 GAME OVER: Игрок коснулся земли!');
-        // Показываем текстуру падения на землю
-        this.player.anims.stop();
-        this.player.setTexture('monkey_fall_floor');
-        // Останавливаем движение
-        player.setVelocity(0);
-        this.isFalling = false;
-        // Запускаем последовательность game over
-        this.handleGameOverOnGround();
-        return; // Выходим, чтобы не обрабатывать другие коллизии
+    
+    // ВАЖНО: Обработка земли
+    if (platformObj.isGround && player.body.touching.down) {
+        // Если земля ПОЯВИЛАСЬ (groundAppeared = true) - это game over!
+        if (this.groundAppeared) {
+            console.log('💥 GAME OVER: Игрок коснулся появившейся земли!');
+            // Показываем текстуру падения на землю
+            this.player.anims.stop();
+            this.player.setTexture('monkey_fall_floor');
+            // Останавливаем движение
+            player.setVelocity(0);
+            this.isFalling = false;
+            // Запускаем последовательность game over
+            this.handleGameOverOnGround();
+            return; // Выходим
+        }
+        // Если земля начальная (groundAppeared = false) - просто стоим на ней
+        // Ничего не делаем, это нормальная коллизия
+        return;
     }
+    
     if (platformObj.isGround) {
         console.log('Hit ground! Touching down:', player.body.touching.down, 'Velocity Y:', player.body.velocity.y, 'groundAppeared:', this.groundAppeared);
     }
