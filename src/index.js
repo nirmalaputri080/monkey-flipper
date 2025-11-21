@@ -243,52 +243,59 @@ class MenuScene extends Phaser.Scene {
         const startParam = tg?.initDataUnsafe?.start_param;
         const debugInfo = `start_param: ${startParam || 'NONE'}`;
         
-        // Фон для отладочной панели
+        // Фон для отладочной панели - КОМПАКТНЫЙ ДЛЯ ТЕЛЕФОНА
         const debugBg = this.add.graphics();
-        debugBg.fillStyle(0x000000, 0.8);
-        debugBg.fillRoundedRect(10, 10, CONSTS.WIDTH - 20, 145, 10); // Увеличено до 145 для монет
+        debugBg.fillStyle(0x000000, 0.7);
+        debugBg.fillRoundedRect(10, 10, CONSTS.WIDTH - 20, 100, 8);
         debugBg.setDepth(20);
         
-        // Информация о пользователе
-        const debugText = this.add.text(20, 20, 
-            `${isTelegram} Telegram SDK\n` +
-            `👤 Player: ${userData.username}\n` +
-            `🆔 ID: ${userData.id}\n` +
-            `${debugInfo}`,
+        // Информация о пользователе - УМЕНЬШЕННЫЕ ШРИФТЫ
+        const debugText = this.add.text(15, 15, 
+            `${isTelegram} TG | 👤 ${userData.username} | 🆔 ${userData.id}`,
             { 
-                fontSize: '16px', 
+                fontSize: '12px', 
                 fill: '#FFFFFF', 
-                fontFamily: 'Arial',
-                lineSpacing: 5
+                fontFamily: 'Arial'
             }
         ).setDepth(21);
         
-        // НОВОЕ: Отображение баланса Monkey Coins
-        this.coinsText = this.add.text(20, 115, 
-            `💰 Loading coins...`, 
+        // НОВОЕ: Отображение баланса Monkey Coins - КРУПНЕЕ
+        this.coinsText = this.add.text(CONSTS.WIDTH / 2, 50, 
+            `💰 Loading...`, 
             { 
-                fontSize: '18px', 
+                fontSize: '20px', 
                 fill: '#FFD700', 
                 fontFamily: 'Arial Black',
                 stroke: '#000000',
                 strokeThickness: 3
             }
-        ).setDepth(21);
+        ).setOrigin(0.5).setDepth(21);
+        
+        // Подсказка - запас монет внизу панели
+        this.add.text(CONSTS.WIDTH / 2, 80, 
+            `Earn coins by playing! 🎮`, 
+            { 
+                fontSize: '11px', 
+                fill: '#AAAAAA', 
+                fontFamily: 'Arial',
+                fontStyle: 'italic'
+            }
+        ).setOrigin(0.5).setDepth(21);
         
         // НОВОЕ: Загружаем баланс асинхронно
         this.loadMonkeyCoins(userData.id);
 
-        // Кнопки (увеличили расстояние между ними)
+        // Кнопки - КОМПАКТНЫЕ ДЛЯ ТЕЛЕФОНА
         const buttons = [
-            { text: 'Start', y: CONSTS.HEIGHT / 2, callback: () => this.scene.start('GameScene') },
-            { text: '1v1 Online', y: CONSTS.HEIGHT / 2 + 80, callback: () => this.scene.start('MatchmakingScene') }, // НОВОЕ: 1v1 режим
-            { text: 'Duels', y: CONSTS.HEIGHT / 2 + 160, callback: () => this.scene.start('DuelHistoryScene') }, // НОВОЕ: История дуэлей
-            { text: 'Leaderboard', y: CONSTS.HEIGHT / 2 + 240, callback: () => this.openLeaderboard() },
-            { text: 'Shop', y: CONSTS.HEIGHT / 2 + 320, callback: () => this.showShop() }, // НОВОЕ: Кнопка для магазина
+            { text: 'Start', y: CONSTS.HEIGHT / 2 - 60, callback: () => this.scene.start('GameScene') },
+            { text: '1v1 Online', y: CONSTS.HEIGHT / 2 + 0, callback: () => this.scene.start('MatchmakingScene') },
+            { text: 'Duels', y: CONSTS.HEIGHT / 2 + 60, callback: () => this.scene.start('DuelHistoryScene') },
+            { text: 'Leaderboard', y: CONSTS.HEIGHT / 2 + 120, callback: () => this.openLeaderboard() },
+            { text: 'Shop', y: CONSTS.HEIGHT / 2 + 180, callback: () => this.showShop() },
             {
-                text: 'Exit', y: CONSTS.HEIGHT / 2 + 400, callback: () => { // НОВОЕ: Сдвинул Exit еще ниже
+                text: 'Exit', y: CONSTS.HEIGHT / 2 + 240, callback: () => {
                     if (!window.close()) {
-                        this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 + 200, 'Please close the tab', { fontSize: '24px', fill: '#F00' }).setOrigin(0.5);
+                        this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 + 200, 'Please close the tab', { fontSize: '20px', fill: '#F00' }).setOrigin(0.5);
                     }
                 }
             }
@@ -297,14 +304,14 @@ class MenuScene extends Phaser.Scene {
         buttons.forEach(btnData => {
             const btnGraphics = this.add.graphics().setDepth(1);
             btnGraphics.fillStyle(0xFFFFFF, 1);
-            btnGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 100, btnData.y - 30, 200, 60, 10);
+            btnGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 90, btnData.y - 24, 180, 48, 8);
 
-            const btnText = this.add.text(CONSTS.WIDTH / 2, btnData.y, btnData.text, { fontSize: '32px', fill: '#000', fontFamily: 'Arial' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(2);
+            const btnText = this.add.text(CONSTS.WIDTH / 2, btnData.y, btnData.text, { fontSize: '24px', fill: '#000', fontFamily: 'Arial Black' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(2);
 
             const setButtonColor = (hover) => {
                 btnGraphics.clear();
                 btnGraphics.fillStyle(hover ? 0xCCCCCC : 0xFFFFFF, 1);
-                btnGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 100, btnData.y - 30, 200, 60, 10);
+                btnGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 90, btnData.y - 24, 180, 48, 8);
             };
 
             btnText.on('pointerover', () => setButtonColor(true));
@@ -317,7 +324,7 @@ class MenuScene extends Phaser.Scene {
                 this.tweens.add({
                     targets: obj,
                     alpha: 1,
-                    duration: 800,
+                    duration: 600,
                     ease: 'Power2'
                 });
             });
@@ -509,18 +516,18 @@ class LeaderboardScene extends Phaser.Scene {
         this.background = this.add.image(0, 0, 'background_img').setOrigin(0, 0);
         this.background.setDisplaySize(CONSTS.WIDTH, CONSTS.HEIGHT);
         
-        // Заголовок
-        this.add.text(CONSTS.WIDTH / 2, 60, '🏆 LEADERBOARD', {
-            fontSize: '40px',
+        // Заголовок - КОМПАКТНЕЕ
+        this.add.text(CONSTS.WIDTH / 2, 40, '🏆 LEADERBOARD', {
+            fontSize: '32px',
             fill: '#FFD700',
             fontFamily: 'Arial Black',
             stroke: '#000000',
-            strokeThickness: 6
+            strokeThickness: 4
         }).setOrigin(0.5);
         
         // Статус загрузки
         this.loadingText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2, '⏳ Loading...', {
-            fontSize: '24px',
+            fontSize: '20px',
             fill: '#FFFFFF',
             fontFamily: 'Arial'
         }).setOrigin(0.5);
@@ -533,17 +540,17 @@ class LeaderboardScene extends Phaser.Scene {
     }
     
     createBackButton() {
-        const buttonY = CONSTS.HEIGHT - 50;
+        const buttonY = CONSTS.HEIGHT - 35;
         
         const backGraphics = this.add.graphics();
         backGraphics.fillStyle(0x2196F3, 1);
-        backGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 80, buttonY - 22, 160, 44, 8);
+        backGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 70, buttonY - 18, 140, 36, 8);
         
-        const backZone = this.add.rectangle(CONSTS.WIDTH / 2, buttonY, 160, 44, 0x000000, 0)
+        const backZone = this.add.rectangle(CONSTS.WIDTH / 2, buttonY, 140, 36, 0x000000, 0)
             .setInteractive({ useHandCursor: true });
         
         const backText = this.add.text(CONSTS.WIDTH / 2, buttonY, '← Back', {
-            fontSize: '24px',
+            fontSize: '20px',
             fill: '#FFF',
             fontFamily: 'Arial Black'
         }).setOrigin(0.5);
@@ -580,28 +587,28 @@ class LeaderboardScene extends Phaser.Scene {
         
         if (this.leaderboardData.length === 0) {
             this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2, 'No records yet', {
-                fontSize: '24px',
+                fontSize: '20px',
                 fill: '#FFFFFF',
                 fontFamily: 'Arial'
             }).setOrigin(0.5);
             return;
         }
         
-        // Создаем скроллируемый список
-        const startY = 120;
-        const rowHeight = 45;
-        const maxVisible = 10;
+        // Создаем компактный список для телефона
+        const startY = 90;
+        const rowHeight = 38;
+        const maxVisible = 12;
         
         this.leaderboardData.slice(0, maxVisible).forEach((player, index) => {
             const rank = index + 1;
             const y = startY + index * rowHeight;
             
-            // Фон строки
+            // Фон строки - компактнее
             const rowBg = this.add.graphics();
             rowBg.fillStyle(index % 2 === 0 ? 0x333333 : 0x222222, 0.7);
-            rowBg.fillRoundedRect(20, y - 18, CONSTS.WIDTH - 40, 36, 6);
+            rowBg.fillRoundedRect(15, y - 15, CONSTS.WIDTH - 30, 32, 5);
             
-            // Место
+            // Место - меньше
             let rankText = `${rank}`;
             let rankColor = '#FFFFFF';
             if (rank === 1) {
@@ -615,32 +622,32 @@ class LeaderboardScene extends Phaser.Scene {
                 rankColor = '#CD7F32';
             }
             
-            this.add.text(40, y, rankText, {
-                fontSize: '20px',
+            this.add.text(30, y, rankText, {
+                fontSize: '16px',
                 fill: rankColor,
                 fontFamily: 'Arial Black'
             }).setOrigin(0, 0.5);
             
-            // Имя игрока
+            // Имя игрока - короче
             const username = player.username || 'Anonymous';
-            this.add.text(100, y, username.length > 15 ? username.substring(0, 15) + '...' : username, {
-                fontSize: '18px',
+            this.add.text(70, y, username.length > 12 ? username.substring(0, 12) + '...' : username, {
+                fontSize: '15px',
                 fill: '#FFFFFF',
                 fontFamily: 'Arial'
             }).setOrigin(0, 0.5);
             
-            // Счет
-            this.add.text(CONSTS.WIDTH - 40, y, player.score.toLocaleString(), {
-                fontSize: '20px',
+            // Счет - меньше
+            this.add.text(CONSTS.WIDTH - 25, y, player.score.toLocaleString(), {
+                fontSize: '16px',
                 fill: '#00FF00',
                 fontFamily: 'Arial Black'
             }).setOrigin(1, 0.5);
         });
         
-        // Показываем количество игроков
-        this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT - 100, 
+        // Показываем количество игроков - меньше текст
+        this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT - 60, 
             `Total players: ${this.leaderboardData.length}`, {
-            fontSize: '16px',
+            fontSize: '13px',
             fill: '#AAAAAA',
             fontFamily: 'Arial'
         }).setOrigin(0.5);
@@ -664,22 +671,22 @@ class ShopScene extends Phaser.Scene {
         this.background = this.add.image(0, 0, 'background_img').setOrigin(0, 0);
         this.background.setDisplaySize(CONSTS.WIDTH, CONSTS.HEIGHT);
         
-        // Заголовок
-        this.add.text(CONSTS.WIDTH / 2, 60, '🛒 SHOP', {
-            fontSize: '40px',
+        // Заголовок - КОМПАКТНЕЕ
+        this.add.text(CONSTS.WIDTH / 2, 40, '🛒 SHOP', {
+            fontSize: '32px',
             fill: '#FFD700',
             fontFamily: 'Arial Black',
             stroke: '#000000',
-            strokeThickness: 6
+            strokeThickness: 4
         }).setOrigin(0.5);
         
-        // Баланс
-        this.coinsText = this.add.text(CONSTS.WIDTH / 2, 120, '💰 Loading...', {
-            fontSize: '24px',
+        // Баланс - КОМПАКТНЕЕ
+        this.coinsText = this.add.text(CONSTS.WIDTH / 2, 80, '💰 Loading...', {
+            fontSize: '20px',
             fill: '#00FF00',
             fontFamily: 'Arial Black',
             stroke: '#000000',
-            strokeThickness: 3
+            strokeThickness: 2
         }).setOrigin(0.5);
         
         // Кнопка "Назад"
@@ -690,17 +697,17 @@ class ShopScene extends Phaser.Scene {
     }
     
     createBackButton() {
-        const buttonY = CONSTS.HEIGHT - 50;
+        const buttonY = CONSTS.HEIGHT - 35;
         
         const backGraphics = this.add.graphics();
         backGraphics.fillStyle(0x2196F3, 1);
-        backGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 80, buttonY - 22, 160, 44, 8);
+        backGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 70, buttonY - 18, 140, 36, 8);
         
-        const backZone = this.add.rectangle(CONSTS.WIDTH / 2, buttonY, 160, 44, 0x000000, 0)
+        const backZone = this.add.rectangle(CONSTS.WIDTH / 2, buttonY, 140, 36, 0x000000, 0)
             .setInteractive({ useHandCursor: true });
         
         const backText = this.add.text(CONSTS.WIDTH / 2, buttonY, '← Back', {
-            fontSize: '24px',
+            fontSize: '20px',
             fill: '#FFF',
             fontFamily: 'Arial Black'
         }).setOrigin(0.5);
@@ -740,45 +747,47 @@ class ShopScene extends Phaser.Scene {
             { name: '🍌 +1000 Score', price: 30, id: 'boost_score', description: 'Instant +1000 points' }
         ];
         
-        const startY = 180;
-        const rowHeight = 80;
+        // МОБИЛЬНАЯ ВЕРСИЯ - компактные карточки
+        const startY = 120;
+        const rowHeight = 65;
         const itemsPerPage = 6;
         
         items.slice(0, itemsPerPage).forEach((item, index) => {
             const y = startY + index * rowHeight;
             
-            // Фон товара
+            // Фон товара - компактнее
             const itemBg = this.add.graphics();
             itemBg.fillStyle(0x222222, 0.8);
-            itemBg.fillRoundedRect(30, y - 30, CONSTS.WIDTH - 60, 70, 10);
+            itemBg.fillRoundedRect(15, y - 25, CONSTS.WIDTH - 30, 55, 8);
             
-            // Название и описание
-            this.add.text(45, y - 15, item.name, {
-                fontSize: '20px',
+            // Название - уменьшенный шрифт
+            this.add.text(25, y - 12, item.name, {
+                fontSize: '16px',
                 fill: '#FFFFFF',
                 fontFamily: 'Arial Black'
             });
             
-            this.add.text(45, y + 10, item.description, {
-                fontSize: '14px',
+            // Описание - еще меньше
+            this.add.text(25, y + 8, item.description, {
+                fontSize: '11px',
                 fill: '#AAAAAA',
                 fontFamily: 'Arial'
             });
             
-            // Кнопка покупки
+            // Кнопка покупки - компактнее
             const canAfford = this.monkeyCoins >= item.price;
             const buttonColor = canAfford ? 0x4CAF50 : 0x666666;
             
             const buyButton = this.add.graphics();
             buyButton.fillStyle(buttonColor, 1);
-            buyButton.fillRoundedRect(CONSTS.WIDTH - 140, y - 20, 110, 40, 8);
+            buyButton.fillRoundedRect(CONSTS.WIDTH - 95, y - 16, 80, 32, 6);
             
-            const buyZone = this.add.rectangle(CONSTS.WIDTH - 85, y, 110, 40, 0x000000, 0)
+            const buyZone = this.add.rectangle(CONSTS.WIDTH - 55, y, 80, 32, 0x000000, 0)
                 .setInteractive({ useHandCursor: canAfford });
             
-            const buyText = this.add.text(CONSTS.WIDTH - 85, y, 
-                canAfford ? `Buy ${item.price}💰` : `${item.price}💰`, {
-                fontSize: '16px',
+            const buyText = this.add.text(CONSTS.WIDTH - 55, y, 
+                canAfford ? `${item.price}💰` : `${item.price}💰`, {
+                fontSize: '14px',
                 fill: canAfford ? '#FFF' : '#999',
                 fontFamily: 'Arial Black'
             }).setOrigin(0.5);
@@ -790,12 +799,13 @@ class ShopScene extends Phaser.Scene {
             }
         });
         
-        // Информация внизу
-        this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT - 100, 
-            'Earn Monkey Coins by playing!', {
-            fontSize: '16px',
+        // Информация внизу - меньше текст
+        this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT - 60, 
+            'Earn Monkey Coins by playing! 🎮', {
+            fontSize: '13px',
             fill: '#AAAAAA',
-            fontFamily: 'Arial'
+            fontFamily: 'Arial',
+            fontStyle: 'italic'
         }).setOrigin(0.5);
     }
     
