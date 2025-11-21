@@ -2115,13 +2115,57 @@ class GameScene extends Phaser.Scene {
         this.player.setVelocityY(0); // ФИКС: Явно нулевая скорость вниз (гравитация включена по умолчанию)
         
         // ФИКС Phase 2: Круглый hitbox для обезьянки (более точные коллизии)
+        // Картинка 124x120, после scale(0.7) = 86.8x84
         const radius = (this.player.displayWidth / 2) * 0.7; // 70% от размера спрайта
-        this.player.body.setCircle(radius);
+        const offsetX = (this.player.displayWidth - radius * 2) / 2;  // Центрирование по X
+        const offsetY = (this.player.displayHeight - radius * 2) / 2; // Центрирование по Y
+        this.player.body.setCircle(radius, offsetX, offsetY);
+        
+        console.log('🐵 Player hitbox:', {
+            textureSize: '124x120',
+            scale: 0.7,
+            displaySize: `${this.player.displayWidth}x${this.player.displayHeight}`,
+            circleRadius: radius,
+            offset: `${offsetX}, ${offsetY}`
+        });
         
         this.player.setOrigin(0.5, 0.5);
         this.player.setDepth(10);
         this.player.setCollideWorldBounds(true); // ФИКС: Включаем коллизию с границами мира
         this.player.body.maxVelocity.set(300, 1200); // ФИКС: Увеличена максимальная скорость падения (было 800)
+
+        // ОТЛАДКА: Визуализация границ спрайта (ВРЕМЕННО - удалить после проверки)
+        const debugGraphics = this.add.graphics();
+        debugGraphics.lineStyle(2, 0xFF0000, 1); // Красная линия
+        debugGraphics.strokeRect(
+            this.player.x - this.player.displayWidth / 2,
+            this.player.y - this.player.displayHeight / 2,
+            this.player.displayWidth,
+            this.player.displayHeight
+        );
+        debugGraphics.setDepth(100);
+        
+        // Обновляем границы каждый кадр
+        this.events.on('update', () => {
+            if (this.player && debugGraphics) {
+                debugGraphics.clear();
+                debugGraphics.lineStyle(2, 0xFF0000, 1); // Красный = границы спрайта
+                debugGraphics.strokeRect(
+                    this.player.x - this.player.displayWidth / 2,
+                    this.player.y - this.player.displayHeight / 2,
+                    this.player.displayWidth,
+                    this.player.displayHeight
+                );
+                
+                // Зеленый круг = физический хитбокс
+                debugGraphics.lineStyle(2, 0x00FF00, 1);
+                debugGraphics.strokeCircle(
+                    this.player.body.center.x,
+                    this.player.body.center.y,
+                    this.player.body.halfWidth
+                );
+            }
+        });
 
         // ФИКС: Сразу idle-анимация (игрок стоит на земле)
         this.player.anims.stop();
