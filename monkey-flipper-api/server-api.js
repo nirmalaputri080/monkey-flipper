@@ -303,7 +303,7 @@ app.post('/api/save-score', gameResultLimiter, async (req, res) => {
       // Записываем транзакцию
       await client.query(`
         INSERT INTO transactions (user_id, type, amount, currency, status, nonce, metadata)
-        VALUES ($1, 'game_reward', $2, 'monkey_coin', 'completed', $3, $4)
+        VALUES ($1, 'game_reward', $2, 'monkey', 'completed', $3, $4)
       `, [
         userId,
         coinsEarned,
@@ -893,7 +893,7 @@ app.post('/api/shop/purchase', async (req, res) => {
     // Записываем транзакцию
     await client.query(`
       INSERT INTO transactions (user_id, type, amount, currency, status, nonce, metadata)
-      VALUES ($1, 'shop_purchase', $2, 'monkey_coin', 'completed', $3, $4)
+      VALUES ($1, 'shop_purchase', $2, 'monkey', 'completed', $3, $4)
     `, [
       userId,
       price,
