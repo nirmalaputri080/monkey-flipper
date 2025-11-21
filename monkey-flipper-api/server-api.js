@@ -1,10 +1,17 @@
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
+const crypto = require('crypto');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// JWT Secret (в production должен быть в .env)
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const BOT_TOKEN = process.env.BOT_TOKEN || ''; // Telegram Bot Token
 
 app.use(cors());
 app.use(express.json());
@@ -13,6 +20,92 @@ app.use(express.json());
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
+});
+
+// ==================== SECURITY MIDDLEWARE ====================
+
+// Валидация Telegram initData
+function validateTelegramInitData(initData) {
+  if (!BOT_TOKEN) {
+    console.warn('⚠️ BOT_TOKEN not set, skipping Telegram validation');
+    return true; // В тестовом режиме пропускаем
+  }
+
+  try {
+    const urlParams = new URLSearchParams(initData);
+    const hash = urlParams.get('hash');
+    urlParams.delete('hash');
+    
+    // Сортируем параметры
+    const dataCheckString = Array.from(urlParams.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => `${key}=${value}`)
+      .join('\n');
+    
+    // Вычисляем HMAC
+    const secretKey = crypto.createHmac('sha256', 'WebAppData').update(BOT_TOKEN).digest();
+    const calculatedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+    
+    return calculatedHash === hash;
+  } catch (error) {
+    console.error('Telegram validation error:', error);
+    return false;
+  }
+}
+
+// Middleware для проверки Telegram initData
+const validateTelegram = (req, res, next) => {
+  const initData = req.headers['x-telegram-init-data'];
+  
+  if (!initData) {
+    // Для обратной совместимости пропускаем если нет заголовка
+    console.warn('⚠️ No Telegram initData provided');
+    return next();
+  }
+  
+  if (!validateTelegramInitData(initData)) {
+    return res.status(401).json({ success: false, error: 'Invalid Telegram data' });
+  }
+  
+  next();
+};
+
+// JWT генерация
+function generateJWT(userId, username) {
+  return jwt.sign(
+    { userId, username },
+    JWT_SECRET,
+    { expiresIn: '24h' }
+  );
+}
+
+// JWT валидация middleware
+const validateJWT = (req, res, next) => {
+  const token = req.headers['authorization']?.replace('Bearer ', '');
+  
+  if (!token) {
+    return res.status(401).json({ success: false, error: 'No token provided' });
+  }
+  
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(401).json({ success: false, error: 'Invalid token' });
+  }
+};
+
+// Rate limiting - 5 запросов в минуту на игрока
+const gameResultLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 минута
+  max: 5, // 5 запросов
+  message: { success: false, error: 'Too many requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    return req.body.userId || req.user?.userId || req.ip;
+  }
 });
 
 // Create table if not exists
@@ -95,14 +188,49 @@ const pool = new Pool({
       END $$;
     `);
     
-    console.log('✅ DB ready (player_scores + duels + migrations applied)');
+    // Таблица для кошельков и балансов
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS wallets (
+        user_id VARCHAR(255) PRIMARY KEY,
+        monkey_coin_balance INTEGER DEFAULT 0,
+        stars_balance DECIMAL(20, 8) DEFAULT 0,
+        ton_balance DECIMAL(20, 8) DEFAULT 0,
+        wallet_address VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_wallet_user ON wallets(user_id);
+    `);
+    
+    // Таблица для транзакций (STARS, TON, Monkey Coin)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR(255) NOT NULL,
+        type VARCHAR(50) NOT NULL,
+        amount DECIMAL(20, 8) NOT NULL,
+        currency VARCHAR(10) NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        nonce VARCHAR(255) UNIQUE NOT NULL,
+        signature TEXT,
+        metadata JSONB,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        completed_at TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_trans_user ON transactions(user_id);
+      CREATE INDEX IF NOT EXISTS idx_trans_status ON transactions(status);
+      CREATE INDEX IF NOT EXISTS idx_trans_created ON transactions(created_at DESC);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_trans_nonce ON transactions(nonce);
+    `);
+    
+    console.log('✅ DB ready (player_scores + duels + wallets + transactions + migrations applied)');
   } catch (err) {
     console.error('DB setup error', err);
   }
 })();
 
-// Save score
-app.post('/api/save-score', async (req, res) => {
+// Save score (с rate limiting)
+app.post('/api/save-score', gameResultLimiter, async (req, res) => {
   const { userId, username, score } = req.body;
   if (!userId || typeof score !== 'number') {
     return res.status(400).json({ success: false, error: 'Invalid payload' });
@@ -514,6 +642,96 @@ setInterval(async () => {
     console.error('Auto-expire duels error', err);
   }
 }, 60 * 60 * 1000); // Каждый час
+
+// ==================== WALLET & CURRENCY ENDPOINTS ====================
+
+// Получить баланс кошелька
+app.get('/api/wallet/:userId', async (req, res) => {
+  const { userId } = req.params;
+  
+  try {
+    let wallet = await pool.query('SELECT * FROM wallets WHERE user_id = $1', [userId]);
+    
+    if (wallet.rows.length === 0) {
+      // Создаем кошелек если его нет
+      await pool.query(`
+        INSERT INTO wallets (user_id, monkey_coin_balance, stars_balance, ton_balance)
+        VALUES ($1, 0, 0, 0)
+      `, [userId]);
+      
+      wallet = await pool.query('SELECT * FROM wallets WHERE user_id = $1', [userId]);
+    }
+    
+    return res.json({
+      success: true,
+      wallet: {
+        monkeyCoin: wallet.rows[0].monkey_coin_balance,
+        stars: wallet.rows[0].stars_balance,
+        ton: wallet.rows[0].ton_balance,
+        address: wallet.rows[0].wallet_address
+      }
+    });
+  } catch (err) {
+    console.error('Get wallet error', err);
+    return res.status(500).json({ success: false, error: 'DB error' });
+  }
+});
+
+// Добавить Monkey Coins (например, за игру)
+app.post('/api/wallet/add-coins', gameResultLimiter, async (req, res) => {
+  const { userId, amount } = req.body;
+  
+  if (!userId || typeof amount !== 'number' || amount <= 0) {
+    return res.status(400).json({ success: false, error: 'Invalid payload' });
+  }
+  
+  try {
+    // Создаем или обновляем кошелек
+    await pool.query(`
+      INSERT INTO wallets (user_id, monkey_coin_balance)
+      VALUES ($1, $2)
+      ON CONFLICT (user_id)
+      DO UPDATE SET 
+        monkey_coin_balance = wallets.monkey_coin_balance + $2,
+        updated_at = NOW()
+    `, [userId, amount]);
+    
+    // Получаем новый баланс
+    const result = await pool.query('SELECT monkey_coin_balance FROM wallets WHERE user_id = $1', [userId]);
+    
+    return res.json({
+      success: true,
+      newBalance: result.rows[0].monkey_coin_balance
+    });
+  } catch (err) {
+    console.error('Add coins error', err);
+    return res.status(500).json({ success: false, error: 'DB error' });
+  }
+});
+
+// История транзакций
+app.get('/api/transactions/:userId', async (req, res) => {
+  const { userId } = req.params;
+  const limit = parseInt(req.query.limit) || 50;
+  
+  try {
+    const result = await pool.query(`
+      SELECT id, type, amount, currency, status, created_at, completed_at
+      FROM transactions
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT $2
+    `, [userId, limit]);
+    
+    return res.json({
+      success: true,
+      transactions: result.rows
+    });
+  } catch (err) {
+    console.error('Get transactions error', err);
+    return res.status(500).json({ success: false, error: 'DB error' });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`API server listening on ${PORT}`);
