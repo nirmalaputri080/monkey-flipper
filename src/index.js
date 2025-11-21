@@ -104,12 +104,14 @@ async function saveScoreToServer(userId, username, score) {
         const result = await response.json();
         console.log('✅ Сервер ответил:', result);
         
-        // Возвращаем результат (новый рекорд или нет)
+        // Возвращаем результат (новый рекорд или нет) + информация о монетах
         return {
             success: true,
             isNewRecord: result.isNewRecord,
             bestScore: result.bestScore,
-            gamesPlayed: result.gamesPlayed
+            gamesPlayed: result.gamesPlayed,
+            coinsEarned: result.coinsEarned || 0,
+            newBalance: result.newBalance || 0
         };
     } catch (error) {
         console.error('❌ Ошибка отправки счета на сервер:', error);
@@ -2773,6 +2775,15 @@ class GameScene extends Phaser.Scene {
             fontFamily: 'Arial' 
         }).setOrigin(0.5).setScrollFactor(0).setDepth(15);
 
+        // НОВОЕ: Текст для отображения полученных Monkey Coins
+        const coinsEarnedText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 - 80, '', { 
+            fontSize: '16px', 
+            fill: '#FFD700', 
+            fontFamily: 'Arial Black',
+            stroke: '#000000',
+            strokeThickness: 2
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(15).setVisible(false);
+
         // NEW RECORD (если есть) (поднимаем выше на 40px)
         let newRecordText = null;
         if (isNewRecord) {
@@ -2864,6 +2875,26 @@ class GameScene extends Phaser.Scene {
                     serverStatusText.setColor('#00FF00');
                     if (serverResult.isNewRecord) {
                         serverStatusText.setText('✅ Новый рекорд!');
+                    }
+                    
+                    // НОВОЕ: Показываем полученные Monkey Coins
+                    if (serverResult.coinsEarned > 0) {
+                        coinsEarnedText.setText(`+${serverResult.coinsEarned} 🐵 Monkey Coins!`);
+                        coinsEarnedText.setVisible(true);
+                        
+                        // Анимация появления монет
+                        this.tweens.add({
+                            targets: coinsEarnedText,
+                            scaleX: { from: 0.5, to: 1.2 },
+                            scaleY: { from: 0.5, to: 1.2 },
+                            alpha: { from: 0, to: 1 },
+                            duration: 300,
+                            ease: 'Back.easeOut',
+                            yoyo: true,
+                            hold: 1000
+                        });
+                        
+                        console.log(`💰 Получено монет: ${serverResult.coinsEarned}, новый баланс: ${serverResult.newBalance}`);
                     }
                 } else {
                     serverStatusText.setText('⚠️ Локально');

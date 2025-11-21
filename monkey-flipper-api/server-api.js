@@ -235,17 +235,61 @@ app.post('/api/save-score', gameResultLimiter, async (req, res) => {
   if (!userId || typeof score !== 'number') {
     return res.status(400).json({ success: false, error: 'Invalid payload' });
   }
+  
+  const client = await pool.connect();
   try {
-    const bestResult = await pool.query('SELECT MAX(score) as best FROM player_scores WHERE user_id = $1', [userId]);
+    await client.query('BEGIN');
+    
+    // Сохраняем результат игры
+    const bestResult = await client.query('SELECT MAX(score) as best FROM player_scores WHERE user_id = $1', [userId]);
     const previousBest = bestResult.rows[0]?.best || 0;
     const isNewRecord = score > previousBest;
 
-    await pool.query('INSERT INTO player_scores (user_id, username, score) VALUES ($1, $2, $3)', [userId, username, score]);
+    await client.query('INSERT INTO player_scores (user_id, username, score) VALUES ($1, $2, $3)', [userId, username, score]);
 
-    return res.json({ success: true, isNewRecord, bestScore: Math.max(score, previousBest) });
+    // Рассчитываем награду: 1 монета за каждые 100 очков
+    const coinsEarned = Math.floor(score / 100);
+    let newBalance = 0;
+    
+    if (coinsEarned > 0) {
+      // Начисляем Monkey Coins
+      const walletResult = await client.query(`
+        INSERT INTO wallets (user_id, monkey_coin_balance) 
+        VALUES ($1, $2)
+        ON CONFLICT (user_id) 
+        DO UPDATE SET monkey_coin_balance = wallets.monkey_coin_balance + $2
+        RETURNING monkey_coin_balance
+      `, [userId, coinsEarned]);
+      
+      newBalance = walletResult.rows[0].monkey_coin_balance;
+      
+      // Записываем транзакцию
+      await client.query(`
+        INSERT INTO transactions (transaction_id, user_id, type, amount, currency, status, metadata)
+        VALUES ($1, $2, 'game_reward', $3, 'monkey_coin', 'completed', $4)
+      `, [
+        crypto.randomUUID(),
+        userId,
+        coinsEarned,
+        JSON.stringify({ score, username, timestamp: new Date().toISOString() })
+      ]);
+    }
+    
+    await client.query('COMMIT');
+
+    return res.json({ 
+      success: true, 
+      isNewRecord, 
+      bestScore: Math.max(score, previousBest),
+      coinsEarned,
+      newBalance
+    });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('Save error', err);
     return res.status(500).json({ success: false, error: 'DB error' });
+  } finally {
+    client.release();
   }
 });
 
