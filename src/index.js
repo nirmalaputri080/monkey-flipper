@@ -2086,7 +2086,16 @@ class GameScene extends Phaser.Scene {
 
         this.createPlatforms();
         this.createPlayer();
-        this.collider = this.physics.add.collider(this.player, this.platforms, this.handlePlayerPlatformCollision, null, this);
+        
+        // ФИКС: Коллайдер с шарами + фильтр "только приземление ногами сверху"
+        this.collider = this.physics.add.collider(
+            this.player, 
+            this.platforms, 
+            this.handlePlayerPlatformCollision, 
+            this.shouldCollideWithPlatform, // processCallback - фильтр коллизий
+            this
+        );
+        
         // ФИКС: Добавляем отдельный коллайдер для земли (она теперь не в группе platforms)
         this.groundCollider = this.physics.add.collider(this.player, this.ground, this.handlePlayerPlatformCollision, null, this);
         // УБРАНО: startFollow - используем ручное управление камерой для избежания дерганья
@@ -2121,12 +2130,8 @@ class GameScene extends Phaser.Scene {
         const offsetY = this.player.displayHeight - radius * 2 - 5; // Сдвигаем ВНИЗ к ногам (5px от низа)
         this.player.body.setCircle(radius, offsetX, offsetY);
         
-        // КРИТИЧНО: Отключаем боковые и нижние коллизии у ИГРОКА
-        // Игрок может пролетать СКВОЗЬ шары, но приземляться СВЕРХУ
-        this.player.body.checkCollision.down = false; // Не сталкиваться снизу
-        this.player.body.checkCollision.left = false;  // Не сталкиваться слева
-        this.player.body.checkCollision.right = false; // Не сталкиваться справа
-        this.player.body.checkCollision.up = true;     // Только сверху (ногами на платформу)
+        // ВАЖНО: Все коллизии ВКЛЮЧЕНЫ у игрока (для стояния на земле)
+        // Контроль "пролетать сквозь шары" делается через processCallback в коллайдере
         
         console.log('🐵 Player hitbox (ноги):', {
             textureSize: '124x120',
@@ -2134,7 +2139,7 @@ class GameScene extends Phaser.Scene {
             displaySize: `${this.player.displayWidth}x${this.player.displayHeight}`,
             circleRadius: radius,
             offset: `${offsetX}, ${offsetY}`,
-            collisions: 'only UP (feet landing)'
+            collisions: 'all enabled, filtered in processCallback'
         });
         
         this.player.setOrigin(0.5, 0.5);
@@ -2870,6 +2875,24 @@ class GameScene extends Phaser.Scene {
         
         // После 10000 - остается 12 шаров
         return 12;
+    }
+
+    // НОВОЕ: Фильтр коллизий - пролетать сквозь шары, приземляться только сверху
+    shouldCollideWithPlatform(player, platform) {
+        // Земля - всегда коллизия (отдельный коллайдер)
+        if (platform.isGround) {
+            return true;
+        }
+        
+        // Для шаров: коллизия ТОЛЬКО если игрок падает СВЕРХУ
+        // И его ноги выше верхней границы шара
+        const playerBottom = player.body.bottom;
+        const platformTop = platform.body.top;
+        const isFallingDown = player.body.velocity.y > 0;
+        const isAbovePlatform = playerBottom <= platformTop + 10; // 10px допуск
+        
+        // Возвращаем true только если падаем сверху
+        return isFallingDown && isAbovePlatform;
     }
 
     handlePlayerPlatformCollision(playerObj, platformObj) {
