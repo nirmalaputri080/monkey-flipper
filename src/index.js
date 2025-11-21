@@ -802,26 +802,97 @@ class ShopScene extends Phaser.Scene {
     async buyItem(item) {
         console.log(`💳 Attempting to buy: ${item.name} for ${item.price} coins`);
         
-        // Пока просто показываем уведомление (позже добавим API)
-        const notification = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2, 
-            `✅ Purchased ${item.name}!\n(Coming soon: actual purchase)`, {
-            fontSize: '20px',
-            fill: '#00FF00',
-            fontFamily: 'Arial Black',
-            align: 'center',
-            backgroundColor: '#000000',
-            padding: { x: 20, y: 15 }
-        }).setOrigin(0.5).setDepth(100);
-        
-        // Анимация уведомления
-        this.tweens.add({
-            targets: notification,
-            alpha: { from: 1, to: 0 },
-            y: { from: CONSTS.HEIGHT / 2, to: CONSTS.HEIGHT / 2 - 100 },
-            duration: 2000,
-            ease: 'Power2',
-            onComplete: () => notification.destroy()
-        });
+        try {
+            // Отправляем запрос на покупку
+            const response = await fetch(`${API_SERVER_URL}/api/shop/purchase`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: this.userData.id,
+                    itemId: item.id,
+                    itemName: item.name,
+                    price: item.price
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Обновляем баланс
+                this.monkeyCoins = data.newBalance;
+                this.coinsText.setText(`💰 ${this.monkeyCoins} Monkey Coins`);
+                
+                // Показываем уведомление об успехе
+                const notification = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2, 
+                    `✅ Purchased ${item.name}!\nNew balance: ${data.newBalance} 💰`, {
+                    fontSize: '20px',
+                    fill: '#00FF00',
+                    fontFamily: 'Arial Black',
+                    align: 'center',
+                    backgroundColor: '#000000',
+                    padding: { x: 20, y: 15 }
+                }).setOrigin(0.5).setDepth(100);
+                
+                // Анимация уведомления
+                this.tweens.add({
+                    targets: notification,
+                    alpha: { from: 1, to: 0 },
+                    y: { from: CONSTS.HEIGHT / 2, to: CONSTS.HEIGHT / 2 - 100 },
+                    duration: 2000,
+                    ease: 'Power2',
+                    onComplete: () => {
+                        notification.destroy();
+                        // Перезагружаем сцену для обновления кнопок
+                        this.scene.restart();
+                    }
+                });
+                
+                console.log(`✅ Purchase successful! New balance: ${data.newBalance}`);
+                
+            } else {
+                // Показываем ошибку
+                const errorNotification = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2, 
+                    `❌ ${data.error || 'Purchase failed'}\nRequired: ${item.price} 💰`, {
+                    fontSize: '20px',
+                    fill: '#FF0000',
+                    fontFamily: 'Arial Black',
+                    align: 'center',
+                    backgroundColor: '#000000',
+                    padding: { x: 20, y: 15 }
+                }).setOrigin(0.5).setDepth(100);
+                
+                this.tweens.add({
+                    targets: errorNotification,
+                    alpha: { from: 1, to: 0 },
+                    duration: 2000,
+                    ease: 'Power2',
+                    onComplete: () => errorNotification.destroy()
+                });
+                
+                console.error('❌ Purchase failed:', data.error);
+            }
+            
+        } catch (error) {
+            console.error('❌ Purchase request error:', error);
+            
+            const errorNotification = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2, 
+                `❌ Connection error\nPlease try again`, {
+                fontSize: '20px',
+                fill: '#FF0000',
+                fontFamily: 'Arial Black',
+                align: 'center',
+                backgroundColor: '#000000',
+                padding: { x: 20, y: 15 }
+            }).setOrigin(0.5).setDepth(100);
+            
+            this.tweens.add({
+                targets: errorNotification,
+                alpha: { from: 1, to: 0 },
+                duration: 2000,
+                ease: 'Power2',
+                onComplete: () => errorNotification.destroy()
+            });
+        }
     }
 }
 

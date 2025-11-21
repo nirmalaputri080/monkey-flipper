@@ -223,7 +223,22 @@ const gameResultLimiter = rateLimit({
       CREATE UNIQUE INDEX IF NOT EXISTS idx_trans_nonce ON transactions(nonce);
     `);
     
-    console.log('✅ DB ready (player_scores + duels + wallets + transactions + migrations applied)');
+    // Таблица для покупок в магазине
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS purchases (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR(255) NOT NULL,
+        item_id VARCHAR(50) NOT NULL,
+        item_name VARCHAR(255) NOT NULL,
+        price INTEGER NOT NULL,
+        status VARCHAR(20) DEFAULT 'active',
+        purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_purchases_user ON purchases(user_id);
+      CREATE INDEX IF NOT EXISTS idx_purchases_item ON purchases(user_id, item_id);
+    `);
+    
+    console.log('✅ DB ready (player_scores + duels + wallets + transactions + purchases + migrations applied)');
   } catch (err) {
     console.error('DB setup error', err);
   }
@@ -779,6 +794,112 @@ app.get('/api/transactions/:userId', async (req, res) => {
     });
   } catch (err) {
     console.error('Get transactions error', err);
+    return res.status(500).json({ success: false, error: 'DB error' });
+  }
+});
+
+// ==================== SHOP ENDPOINTS ====================
+
+// Покупка товара в магазине
+app.post('/api/shop/purchase', async (req, res) => {
+  const { userId, itemId, itemName, price } = req.body;
+  
+  if (!userId || !itemId || !itemName || typeof price !== 'number') {
+    return res.status(400).json({ success: false, error: 'Invalid payload' });
+  }
+  
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    // Проверяем текущий баланс
+    const walletResult = await client.query(
+      'SELECT monkey_coin_balance FROM wallets WHERE user_id = $1',
+      [userId]
+    );
+    
+    const currentBalance = walletResult.rows[0]?.monkey_coin_balance || 0;
+    
+    // Проверяем достаточность средств
+    if (currentBalance < price) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Insufficient funds',
+        currentBalance,
+        required: price
+      });
+    }
+    
+    // Списываем монеты
+    const newBalanceResult = await client.query(`
+      UPDATE wallets 
+      SET monkey_coin_balance = monkey_coin_balance - $1,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE user_id = $2
+      RETURNING monkey_coin_balance
+    `, [price, userId]);
+    
+    const newBalance = newBalanceResult.rows[0]?.monkey_coin_balance || 0;
+    
+    // Сохраняем покупку
+    await client.query(`
+      INSERT INTO purchases (user_id, item_id, item_name, price)
+      VALUES ($1, $2, $3, $4)
+    `, [userId, itemId, itemName, price]);
+    
+    // Записываем транзакцию
+    await client.query(`
+      INSERT INTO transactions (user_id, type, amount, currency, status, nonce, metadata)
+      VALUES ($1, 'shop_purchase', $2, 'monkey_coin', 'completed', $3, $4)
+    `, [
+      userId,
+      price,
+      `shop_purchase_${userId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      JSON.stringify({ itemId, itemName, timestamp: new Date().toISOString() })
+    ]);
+    
+    await client.query('COMMIT');
+    
+    console.log(`✅ Purchase completed: ${itemName} for ${price} coins by ${userId}`);
+    
+    return res.json({
+      success: true,
+      newBalance,
+      purchase: {
+        itemId,
+        itemName,
+        price
+      }
+    });
+    
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Purchase error', err);
+    return res.status(500).json({ success: false, error: 'DB error' });
+  } finally {
+    client.release();
+  }
+});
+
+// Получить купленные товары пользователя
+app.get('/api/shop/purchases/:userId', async (req, res) => {
+  const { userId } = req.params;
+  
+  try {
+    const result = await pool.query(`
+      SELECT item_id, item_name, price, status, purchased_at
+      FROM purchases
+      WHERE user_id = $1 AND status = 'active'
+      ORDER BY purchased_at DESC
+    `, [userId]);
+    
+    return res.json({
+      success: true,
+      purchases: result.rows
+    });
+  } catch (err) {
+    console.error('Get purchases error', err);
     return res.status(500).json({ success: false, error: 'DB error' });
   }
 });
