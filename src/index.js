@@ -2124,10 +2124,23 @@ class GameScene extends Phaser.Scene {
         this.player.setVelocityY(0); // ФИКС: Явно нулевая скорость вниз (гравитация включена по умолчанию)
         
         // ФИКС: Маленький хитбокс ТОЛЬКО В ОБЛАСТИ НОГ (внизу спрайта)
-        // Картинка 124x120, после scale(0.7) = 86.8x84
-        const radius = (this.player.displayWidth / 2) * 0.4; // Маленький круг - 40% от ширины
-        const offsetX = (this.player.displayWidth - radius * 2) / 2;  // Центрируем по X
-        const offsetY = this.player.displayHeight - radius * 2 - 5; // Сдвигаем ВНИЗ к ногам (5px от низа)
+        // Оригинал текстуры: 124x120, после scale(0.7) = 86.8x84
+        // Задача: круг должен быть в самом низу спрайта (у ног)
+        
+        const displayW = this.player.displayWidth;   // 86.8
+        const displayH = this.player.displayHeight;  // 84
+        
+        // Радиус круга - 35% от ширины (маленький круг для ног)
+        const radius = displayW * 0.35;  
+        
+        // offsetX - центрируем круг по горизонтали
+        const offsetX = (displayW - radius * 2) / 2;
+        
+        // offsetY - прижимаем к самому низу спрайта
+        // offset считается от TOP-LEFT угла body, поэтому:
+        // нужно: displayHeight - диаметр круга
+        const offsetY = displayH - radius * 2;
+        
         this.player.body.setCircle(radius, offsetX, offsetY);
         
         // ВАЖНО: Все коллизии ВКЛЮЧЕНЫ у игрока (для стояния на земле)
@@ -2136,10 +2149,12 @@ class GameScene extends Phaser.Scene {
         console.log('🐵 Player hitbox (ноги):', {
             textureSize: '124x120',
             scale: 0.7,
-            displaySize: `${this.player.displayWidth}x${this.player.displayHeight}`,
-            circleRadius: radius,
-            offset: `${offsetX}, ${offsetY}`,
-            collisions: 'all enabled, filtered in processCallback'
+            displaySize: `${displayW.toFixed(1)}x${displayH.toFixed(1)}`,
+            circleRadius: radius.toFixed(1),
+            circleDiameter: (radius * 2).toFixed(1),
+            offsetX: offsetX.toFixed(1),
+            offsetY: offsetY.toFixed(1),
+            position: 'BOTTOM of sprite (feet)'
         });
         
         this.player.setOrigin(0.5, 0.5);
@@ -2147,22 +2162,17 @@ class GameScene extends Phaser.Scene {
         this.player.setCollideWorldBounds(true); // ФИКС: Включаем коллизию с границами мира
         this.player.body.maxVelocity.set(300, 1200); // ФИКС: Увеличена максимальная скорость падения (было 800)
 
-        // ОТЛАДКА: Визуализация границ спрайта (ВРЕМЕННО - удалить после проверки)
+        // ОТЛАДКА: Улучшенная визуализация хитбокса (ВРЕМЕННО)
         const debugGraphics = this.add.graphics();
-        debugGraphics.lineStyle(2, 0xFF0000, 1); // Красная линия
-        debugGraphics.strokeRect(
-            this.player.x - this.player.displayWidth / 2,
-            this.player.y - this.player.displayHeight / 2,
-            this.player.displayWidth,
-            this.player.displayHeight
-        );
         debugGraphics.setDepth(100);
         
-        // Обновляем границы каждый кадр
+        // Обновляем визуализацию каждый кадр
         this.events.on('update', () => {
             if (this.player && debugGraphics) {
                 debugGraphics.clear();
-                debugGraphics.lineStyle(2, 0xFF0000, 1); // Красный = границы спрайта
+                
+                // 1. Красный прямоугольник = границы спрайта
+                debugGraphics.lineStyle(2, 0xFF0000, 1);
                 debugGraphics.strokeRect(
                     this.player.x - this.player.displayWidth / 2,
                     this.player.y - this.player.displayHeight / 2,
@@ -2170,12 +2180,28 @@ class GameScene extends Phaser.Scene {
                     this.player.displayHeight
                 );
                 
-                // Зеленый круг = физический хитбокс
-                debugGraphics.lineStyle(2, 0x00FF00, 1);
+                // 2. Зеленый круг = физический хитбокс (ноги)
+                debugGraphics.lineStyle(3, 0x00FF00, 1);
                 debugGraphics.strokeCircle(
                     this.player.body.center.x,
                     this.player.body.center.y,
                     this.player.body.halfWidth
+                );
+                
+                // 3. Желтая точка = центр спрайта
+                debugGraphics.fillStyle(0xFFFF00, 1);
+                debugGraphics.fillCircle(this.player.x, this.player.y, 3);
+                
+                // 4. Синяя точка = центр физического body
+                debugGraphics.fillStyle(0x0000FF, 1);
+                debugGraphics.fillCircle(this.player.body.center.x, this.player.body.center.y, 3);
+                
+                // 5. Горизонтальная линия = низ спрайта (где должны быть ноги)
+                const spriteBottom = this.player.y + this.player.displayHeight / 2;
+                debugGraphics.lineStyle(2, 0xFFFFFF, 1);
+                debugGraphics.lineBetween(
+                    this.player.x - 30, spriteBottom,
+                    this.player.x + 30, spriteBottom
                 );
             }
         });
