@@ -308,27 +308,10 @@ class MenuScene extends Phaser.Scene {
     }
 
     // Метод для показа экрана рекордов
-    // ФИКС: Открываем leaderboard.html вместо показа локальных рекордов
+    // ФИКС Phase 3: Открываем встроенную LeaderboardScene (без выхода из приложения)
     openLeaderboard() {
         console.log('📊 Открываем таблицу лидеров...');
-        
-        // Проверяем, запущено ли в Telegram
-        if (window.Telegram && window.Telegram.WebApp) {
-            const tg = window.Telegram.WebApp;
-            
-            // Получаем текущий URL игры
-            const currentUrl = window.location.origin;
-            const leaderboardUrl = `${currentUrl}/leaderboard.html`;
-            
-            console.log('🔗 Открываем URL:', leaderboardUrl);
-            
-            // Открываем в Telegram через openLink
-            tg.openLink(leaderboardUrl);
-        } else {
-            // Если не в Telegram - открываем в новой вкладке браузера
-            console.log('🌐 Открываем в новой вкладке браузера');
-            window.open('/leaderboard.html', '_blank');
-        }
+        this.scene.start('LeaderboardScene');
     }
 
     // УБРАНО: Старый метод showScoreBoard() больше не используется
@@ -613,6 +596,158 @@ class MenuScene extends Phaser.Scene {
             console.error('❌ Deep link error:', error);
             alert(`Failed to accept challenge: ${error.message}`);
         }
+    }
+}
+
+// ==================== LEADERBOARD SCENE ====================
+// Встроенный лидерборд без выхода из приложения
+class LeaderboardScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'LeaderboardScene' });
+        this.leaderboardData = [];
+        this.loadingText = null;
+    }
+    
+    create() {
+        // Фон
+        this.background = this.add.image(0, 0, 'background_img').setOrigin(0, 0);
+        this.background.setDisplaySize(CONSTS.WIDTH, CONSTS.HEIGHT);
+        
+        // Заголовок
+        this.add.text(CONSTS.WIDTH / 2, 60, '🏆 LEADERBOARD', {
+            fontSize: '40px',
+            fill: '#FFD700',
+            fontFamily: 'Arial Black',
+            stroke: '#000000',
+            strokeThickness: 6
+        }).setOrigin(0.5);
+        
+        // Статус загрузки
+        this.loadingText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2, '⏳ Loading...', {
+            fontSize: '24px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial'
+        }).setOrigin(0.5);
+        
+        // Кнопка "Назад"
+        this.createBackButton();
+        
+        // Загружаем данные
+        this.loadLeaderboard();
+    }
+    
+    createBackButton() {
+        const buttonY = CONSTS.HEIGHT - 50;
+        
+        const backGraphics = this.add.graphics();
+        backGraphics.fillStyle(0x2196F3, 1);
+        backGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 80, buttonY - 22, 160, 44, 8);
+        
+        const backZone = this.add.rectangle(CONSTS.WIDTH / 2, buttonY, 160, 44, 0x000000, 0)
+            .setInteractive({ useHandCursor: true });
+        
+        const backText = this.add.text(CONSTS.WIDTH / 2, buttonY, '← Back', {
+            fontSize: '24px',
+            fill: '#FFF',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
+        
+        backZone.on('pointerdown', () => {
+            console.log('🔙 Back to menu');
+            this.scene.start('MenuScene');
+        });
+    }
+    
+    async loadLeaderboard() {
+        try {
+            const response = await fetch(`${API_SERVER_URL}/api/leaderboard?limit=20`);
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error('Failed to load leaderboard');
+            }
+            
+            this.leaderboardData = data.rows || [];
+            this.displayLeaderboard();
+            
+        } catch (error) {
+            console.error('❌ Leaderboard load error:', error);
+            this.loadingText.setText('❌ Error loading data');
+        }
+    }
+    
+    displayLeaderboard() {
+        // Удаляем loading text
+        if (this.loadingText) {
+            this.loadingText.destroy();
+        }
+        
+        if (this.leaderboardData.length === 0) {
+            this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2, 'No records yet', {
+                fontSize: '24px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial'
+            }).setOrigin(0.5);
+            return;
+        }
+        
+        // Создаем скроллируемый список
+        const startY = 120;
+        const rowHeight = 45;
+        const maxVisible = 10;
+        
+        this.leaderboardData.slice(0, maxVisible).forEach((player, index) => {
+            const rank = index + 1;
+            const y = startY + index * rowHeight;
+            
+            // Фон строки
+            const rowBg = this.add.graphics();
+            rowBg.fillStyle(index % 2 === 0 ? 0x333333 : 0x222222, 0.7);
+            rowBg.fillRoundedRect(20, y - 18, CONSTS.WIDTH - 40, 36, 6);
+            
+            // Место
+            let rankText = `${rank}`;
+            let rankColor = '#FFFFFF';
+            if (rank === 1) {
+                rankText = '🥇';
+                rankColor = '#FFD700';
+            } else if (rank === 2) {
+                rankText = '🥈';
+                rankColor = '#C0C0C0';
+            } else if (rank === 3) {
+                rankText = '🥉';
+                rankColor = '#CD7F32';
+            }
+            
+            this.add.text(40, y, rankText, {
+                fontSize: '20px',
+                fill: rankColor,
+                fontFamily: 'Arial Black'
+            }).setOrigin(0, 0.5);
+            
+            // Имя игрока
+            const username = player.username || 'Anonymous';
+            this.add.text(100, y, username.length > 15 ? username.substring(0, 15) + '...' : username, {
+                fontSize: '18px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial'
+            }).setOrigin(0, 0.5);
+            
+            // Счет
+            this.add.text(CONSTS.WIDTH - 40, y, player.score.toLocaleString(), {
+                fontSize: '20px',
+                fill: '#00FF00',
+                fontFamily: 'Arial Black'
+            }).setOrigin(1, 0.5);
+        });
+        
+        // Показываем количество игроков
+        this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT - 100, 
+            `Total players: ${this.leaderboardData.length}`, {
+            fontSize: '16px',
+            fill: '#AAAAAA',
+            fontFamily: 'Arial'
+        }).setOrigin(0.5);
     }
 }
 
@@ -1824,13 +1959,9 @@ class GameScene extends Phaser.Scene {
         this.player.setBounce(0, CONSTS.PLAYER_BOUNCE);
         this.player.setVelocityY(0); // ФИКС: Явно нулевая скорость вниз (гравитация включена по умолчанию)
         
-        // ФИКС: Устанавливаем hitbox с правильным offset для центрирования
-        const bodyWidth = 62 * 0.7 * 0.8;  // Ширина тела (уменьшена на 20%)
-        const bodyHeight = playerHeight * 0.8; // Высота тела (уменьшена на 20%)
-        const offsetX = (this.player.displayWidth - bodyWidth) / 2; // Центрируем по X
-        const offsetY = (this.player.displayHeight - bodyHeight) / 2; // Центрируем по Y
-        this.player.body.setSize(bodyWidth, bodyHeight);
-        this.player.body.setOffset(offsetX, offsetY); // КРИТИЧНО: Центрируем тело!
+        // ФИКС Phase 2: Круглый hitbox для обезьянки (более точные коллизии)
+        const radius = (this.player.displayWidth / 2) * 0.7; // 70% от размера спрайта
+        this.player.body.setCircle(radius);
         
         this.player.setOrigin(0.5, 0.5);
         this.player.setDepth(10);
@@ -1958,12 +2089,12 @@ class GameScene extends Phaser.Scene {
             console.log('Ground body setup: Rectangle', body.width, body.height);
         } else {
             // Для обычных платформ — круглый body (как раньше)
-            // ФИКС: Уменьшаем радиус на 20% чтобы физическое тело было внутри видимой части шарика
-            const radius = (platform.displayWidth / 2) * 0.8; // Было 0.5 (половина), стало 0.4
+            // ФИКС Phase 2: Уменьшаем радиус до 0.7 для еще более плавного пролета
+            const radius = (platform.displayWidth / 2) * 0.7; // Было 0.8, стало 0.7
             
             // ФИКС: Центрируем круг относительно спрайта
-            const offsetX = (platform.displayWidth - radius * 2) / 4;  // Сдвиг по X для центрирования
-            const offsetY = (platform.displayHeight - radius * 2) / 4; // Сдвиг по Y для центрирования
+            const offsetX = (platform.displayWidth - radius * 2) / 2;  // Центрирование по X
+            const offsetY = (platform.displayHeight - radius * 2) / 2; // Центрирование по Y
             body.setCircle(radius, offsetX, offsetY);
             
             // ФИКС: Отключаем боковые коллизии чтобы обезьянка не цеплялась при пролете
@@ -3926,7 +4057,7 @@ const config = {
             // Физика теперь адаптируется к частоте дисплея (60/120/144 Hz)
         },
     },
-    scene: [MenuScene, MatchmakingScene, DuelHistoryScene, GameScene]
+    scene: [MenuScene, LeaderboardScene, MatchmakingScene, DuelHistoryScene, GameScene]
 };
 
 // Инициализация
