@@ -2112,21 +2112,13 @@ class GameScene extends Phaser.Scene {
         // ФИКС: Получаем землю (теперь это отдельный спрайт, не из группы)
         const ground = this.ground;
 
-        // ФИКС: Вычисляем Y для центра игрока: центр земли минус половину высоты земли минус половину высоты игрока
-        const playerHeight = 80; // ФИКС: Уменьшено (было 100) - меньше обезьянка
-        const groundHalfHeight = ground.displayHeight / 2;
-        const playerHalfHeight = playerHeight / 2;
-        const playerY = ground.y - groundHalfHeight - playerHalfHeight;
-
-        this.player = this.physics.add.sprite(CONSTS.WIDTH / 2, playerY, 'playerSprite'); // ФИКС: Устанавливаем правильный Y на земле
-        this.player.setScale(0.7); // ФИКС: Уменьшаем размер спрайта обезьянки до 70%
+        // ВАЖНО: Сначала создаем спрайт на временной позиции
+        this.player = this.physics.add.sprite(CONSTS.WIDTH / 2, 0, 'playerSprite');
+        this.player.setScale(0.7);
         this.player.setBounce(0, CONSTS.PLAYER_BOUNCE);
-        this.player.setVelocityY(0); // ФИКС: Явно нулевая скорость вниз (гравитация включена по умолчанию)
+        this.player.setVelocityY(0);
         
         // ФИКС: Маленький хитбокс ТОЛЬКО В ОБЛАСТИ НОГ (внизу спрайта)
-        // Оригинал текстуры: 124x120, после scale(0.7) = 86.8x84
-        // На текстуре ноги начинаются примерно с Y=90 (75% от высоты)
-        
         const displayW = this.player.displayWidth;   // 86.8
         const displayH = this.player.displayHeight;  // 84
         
@@ -2136,11 +2128,25 @@ class GameScene extends Phaser.Scene {
         // offsetX - центрируем круг по горизонтали
         const offsetX = (displayW - radius * 2) / 2;
         
-        // offsetY - позиция 75% от верха (там начинаются ноги)
-        // offset считается от TOP-LEFT угла body
+        // offsetY - позиция 70% от верха (там начинаются ноги)
         const offsetY = displayH * 0.70; // 70% от высоты = область ног/ступней
         
         this.player.body.setCircle(radius, offsetX, offsetY);
+        
+        // ТЕПЕРЬ вычисляем правильную Y позицию с учетом нового хитбокса
+        // Низ хитбокса должен быть на верхней границе земли
+        const groundTop = ground.y - ground.displayHeight / 2;
+        const hitboxBottom = offsetY + radius * 2; // Низ хитбокса от верха спрайта
+        const playerY = groundTop - hitboxBottom + displayH / 2; // Центр спрайта
+        
+        this.player.setY(playerY);
+        
+        console.log('🐵 Player start position:', {
+            groundTop,
+            hitboxBottom,
+            playerY,
+            displayH
+        });
         
         // ВАЖНО: Все коллизии ВКЛЮЧЕНЫ у игрока (для стояния на земле)
         // Контроль "пролетать сквозь шары" делается через processCallback в коллайдере
