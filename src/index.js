@@ -2248,7 +2248,7 @@ class GameScene extends Phaser.Scene {
         this.playerStartY = playerY;
         this.maxReachedY = playerY; // НОВОЕ: Инициализируем максимальную достигнутую высоту
 
-        console.log('Player Y:', playerY, 'Ground Y:', ground.y, 'Ground Half Height:', groundHalfHeight, 'Player Half Height:', playerHalfHeight);
+        console.log('✅ Player created at Y:', playerY, 'Ground Y:', ground.y);
         
         // ==================== OPPONENT GHOST (1V1 & DUEL MODES) ====================
         if (this.gameMode === '1v1') {
