@@ -1966,10 +1966,11 @@ class GameScene extends Phaser.Scene {
             const offsetY = (platform.displayHeight - radius * 2) / 4; // Сдвиг по Y для центрирования
             body.setCircle(radius, offsetX, offsetY);
             
-            body.checkCollision.down = false; // Как было: без коллизии снизу (прыжки сквозь?)
-            body.checkCollision.left = true;
-            body.checkCollision.right = true;
-            body.checkCollision.up = true; // Добавляем up для отскока головой (если нужно)
+            // ФИКС: Отключаем боковые коллизии чтобы обезьянка не цеплялась при пролете
+            body.checkCollision.down = false; // Без коллизии снизу (прыжки сквозь)
+            body.checkCollision.left = false;  // Без коллизии слева (свободный пролет)
+            body.checkCollision.right = false; // Без коллизии справа (свободный пролет)
+            body.checkCollision.up = true;     // Только коллизия сверху (приземление на платформу)
             console.log('Platform body setup: Circle radius', radius, 'из', platform.displayWidth, 'offset:', offsetX, offsetY);
         }
     }

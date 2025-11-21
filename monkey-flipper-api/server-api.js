@@ -96,10 +96,10 @@ const validateJWT = (req, res, next) => {
   }
 };
 
-// Rate limiting - 5 запросов в минуту на игрока
+// Rate limiting - 10 запросов в минуту на игрока (увеличено для быстрых игр)
 const gameResultLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 минута
-  max: 5, // 5 запросов
+  max: 10, // 10 запросов (было 5)
   message: { success: false, error: 'Too many requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -297,10 +297,16 @@ app.post('/api/save-score', gameResultLimiter, async (req, res) => {
 app.get('/api/leaderboard', async (req, res) => {
   const limit = parseInt(req.query.limit) || 100;
   try {
+    // ФИКС: Сначала получаем лучший результат каждого игрока, затем сортируем по score
     const result = await pool.query(`
-      SELECT DISTINCT ON (user_id) user_id, username, score, timestamp
-      FROM player_scores
-      ORDER BY user_id, score DESC, timestamp DESC
+      WITH best_scores AS (
+        SELECT DISTINCT ON (user_id) 
+          user_id, username, score, timestamp
+        FROM player_scores
+        ORDER BY user_id, score DESC, timestamp DESC
+      )
+      SELECT * FROM best_scores
+      ORDER BY score DESC, timestamp DESC
       LIMIT $1
     `, [limit]);
     return res.json({ success: true, rows: result.rows });
