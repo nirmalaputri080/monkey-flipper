@@ -2114,19 +2114,27 @@ class GameScene extends Phaser.Scene {
         this.player.setBounce(0, CONSTS.PLAYER_BOUNCE);
         this.player.setVelocityY(0); // ФИКС: Явно нулевая скорость вниз (гравитация включена по умолчанию)
         
-        // ФИКС Phase 2: Круглый hitbox для обезьянки (более точные коллизии)
+        // ФИКС: Маленький хитбокс ТОЛЬКО В ОБЛАСТИ НОГ (внизу спрайта)
         // Картинка 124x120, после scale(0.7) = 86.8x84
-        const radius = (this.player.displayWidth / 2) * 0.7; // 70% от размера спрайта
-        const offsetX = (this.player.displayWidth - radius * 2) / 2;  // Центрирование по X
-        const offsetY = (this.player.displayHeight - radius * 2) / 2; // Центрирование по Y
+        const radius = (this.player.displayWidth / 2) * 0.4; // Маленький круг - 40% от ширины
+        const offsetX = (this.player.displayWidth - radius * 2) / 2;  // Центрируем по X
+        const offsetY = this.player.displayHeight - radius * 2 - 5; // Сдвигаем ВНИЗ к ногам (5px от низа)
         this.player.body.setCircle(radius, offsetX, offsetY);
         
-        console.log('🐵 Player hitbox:', {
+        // КРИТИЧНО: Отключаем боковые и нижние коллизии у ИГРОКА
+        // Игрок может пролетать СКВОЗЬ шары, но приземляться СВЕРХУ
+        this.player.body.checkCollision.down = false; // Не сталкиваться снизу
+        this.player.body.checkCollision.left = false;  // Не сталкиваться слева
+        this.player.body.checkCollision.right = false; // Не сталкиваться справа
+        this.player.body.checkCollision.up = true;     // Только сверху (ногами на платформу)
+        
+        console.log('🐵 Player hitbox (ноги):', {
             textureSize: '124x120',
             scale: 0.7,
             displaySize: `${this.player.displayWidth}x${this.player.displayHeight}`,
             circleRadius: radius,
-            offset: `${offsetX}, ${offsetY}`
+            offset: `${offsetX}, ${offsetY}`,
+            collisions: 'only UP (feet landing)'
         });
         
         this.player.setOrigin(0.5, 0.5);
