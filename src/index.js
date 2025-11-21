@@ -2087,16 +2087,16 @@ class GameScene extends Phaser.Scene {
         this.createPlatforms();
         this.createPlayer();
         
-        // ФИКС: Коллайдер с шарами + фильтр "только приземление ногами сверху"
+        // Коллайдер с платформами (без фильтра)
         this.collider = this.physics.add.collider(
             this.player, 
             this.platforms, 
             this.handlePlayerPlatformCollision, 
-            this.shouldCollideWithPlatform, // processCallback - фильтр коллизий
+            null, // убран фильтр коллизий
             this
         );
         
-        // ФИКС: Добавляем отдельный коллайдер для земли (она теперь не в группе platforms)
+        // ФИКС: Добавляем отдельный коллайдер для земли
         this.groundCollider = this.physics.add.collider(this.player, this.ground, this.handlePlayerPlatformCollision, null, this);
         // УБРАНО: startFollow - используем ручное управление камерой для избежания дерганья
         // this.cameras.main.startFollow(this.player, false, 0, 0);
@@ -2112,78 +2112,43 @@ class GameScene extends Phaser.Scene {
         // ФИКС: Получаем землю (теперь это отдельный спрайт, не из группы)
         const ground = this.ground;
 
-        // ВАЖНО: Сначала создаем спрайт на временной позиции
-        this.player = this.physics.add.sprite(CONSTS.WIDTH / 2, 0, 'playerSprite');
+        // ФИКС: Вычисляем Y для центра игрока: центр земли минус половину высоты земли минус половину высоты игрока
+        const playerHeight = 80; // ФИКС: Уменьшено (было 100) - меньше обезьянка
+        const groundHalfHeight = ground.displayHeight / 2;
+        const playerHalfHeight = playerHeight / 2;
+        const playerY = ground.y - groundHalfHeight - playerHalfHeight;
+
+        this.player = this.physics.add.sprite(CONSTS.WIDTH / 2, playerY, 'playerSprite');
         this.player.setScale(0.7);
         this.player.setBounce(0, CONSTS.PLAYER_BOUNCE);
         this.player.setVelocityY(0);
         
-        // ФИКС: Маленький хитбокс ТОЛЬКО В ОБЛАСТИ НОГ (внизу спрайта)
-        const displayW = this.player.displayWidth;   // 86.8
-        const displayH = this.player.displayHeight;  // 84
+        // ФИКС Phase 2: Круглый hitbox для обезьянки - ЦЕНТРИРОВАННЫЙ
+        const displayW = this.player.displayWidth;
+        const displayH = this.player.displayHeight;
         
-        // ВРЕМЕННО: Увеличиваем хитбокс до 60% чтобы точно не провалиться (ОТЛАДКА!)
-        const radius = displayW * 0.6;  // Было 0.4, стало 0.6
+        // Радиус круга - 70% от половины ширины
+        const radius = (displayW / 2) * 0.7;
         
-        // offsetX - центрируем круг по горизонтали
+        // ЦЕНТРИРУЕМ круг - offsetX и offsetY от top-left угла body
         const offsetX = (displayW - radius * 2) / 2;
-        
-        // offsetY - позиция 50% от верха (центр) - ВРЕМЕННО ДЛЯ ОТЛАДКИ
-        const offsetY = displayH * 0.50; // Было 0.70, стало 0.50 (центр)
+        const offsetY = (displayH - radius * 2) / 2;
         
         this.player.body.setCircle(radius, offsetX, offsetY);
         
-        // ТЕПЕРЬ вычисляем правильную Y позицию с учетом нового хитбокса
-        // Низ хитбокса должен быть на верхней границе земли
-        const groundTop = ground.y - ground.displayHeight / 2;
-        const hitboxBottom = offsetY + radius * 2; // Низ хитбокса от верха спрайта
-        const playerY = groundTop - hitboxBottom + displayH / 2; // Центр спрайта
-        
-        this.player.setY(playerY);
-        
-        console.log('🐵 Player start position:', {
-            groundY: ground.y,
-            groundDisplayHeight: ground.displayHeight,
-            groundTop,
-            displayH,
-            offsetY,
-            radius,
-            diameter: radius * 2,
-            hitboxBottom,
-            playerY,
-            'player.body.bottom after': this.player.body.bottom
-        });
-        
-        // ВАЖНО: Все коллизии ВКЛЮЧЕНЫ у игрока (для стояния на земле)
-        // Контроль "пролетать сквозь шары" делается через processCallback в коллайдере
-        
-        console.log('🐵 Player hitbox (ноги):', {
+        console.log('🐵 Player hitbox (centered):', {
             textureSize: '124x120',
             scale: 0.7,
             displaySize: `${displayW.toFixed(1)}x${displayH.toFixed(1)}`,
             circleRadius: radius.toFixed(1),
-            circleDiameter: (radius * 2).toFixed(1),
             offsetX: offsetX.toFixed(1),
-            offsetY: offsetY.toFixed(1),
-            position: 'BOTTOM of sprite (feet)'
+            offsetY: offsetY.toFixed(1)
         });
         
         this.player.setOrigin(0.5, 0.5);
         this.player.setDepth(10);
         this.player.setCollideWorldBounds(true);
         this.player.body.maxVelocity.set(300, 1200);
-        
-        // ОТЛАДКА: Проверяем overlap с землей сразу после создания
-        this.time.delayedCall(100, () => {
-            const isOverlapping = this.physics.overlap(this.player, this.ground);
-            console.log('⚠️ Overlap check after 100ms:', {
-                isOverlapping,
-                playerBodyBottom: this.player.body.bottom,
-                groundBodyTop: this.ground.body.top,
-                playerVelocityY: this.player.body.velocity.y,
-                groundColliderActive: this.groundCollider ? 'YES' : 'NO'
-            });
-        });
 
         // ОТЛАДКА: Улучшенная визуализация хитбокса (ВРЕМЕННО)
         const debugGraphics = this.add.graphics();
@@ -2924,24 +2889,6 @@ class GameScene extends Phaser.Scene {
         
         // После 10000 - остается 12 шаров
         return 12;
-    }
-
-    // НОВОЕ: Фильтр коллизий - пролетать сквозь шары, приземляться только сверху
-    shouldCollideWithPlatform(player, platform) {
-        // Земля - всегда коллизия (отдельный коллайдер)
-        if (platform.isGround) {
-            return true;
-        }
-        
-        // Для шаров: коллизия ТОЛЬКО если игрок падает СВЕРХУ
-        // И его ноги выше верхней границы шара
-        const playerBottom = player.body.bottom;
-        const platformTop = platform.body.top;
-        const isFallingDown = player.body.velocity.y > 0;
-        const isAbovePlatform = playerBottom <= platformTop + 10; // 10px допуск
-        
-        // Возвращаем true только если падаем сверху
-        return isFallingDown && isAbovePlatform;
     }
 
     handlePlayerPlatformCollision(playerObj, platformObj) {
