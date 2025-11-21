@@ -265,12 +265,12 @@ app.post('/api/save-score', gameResultLimiter, async (req, res) => {
       
       // Записываем транзакцию
       await client.query(`
-        INSERT INTO transactions (transaction_id, user_id, type, amount, currency, status, metadata)
-        VALUES ($1, $2, 'game_reward', $3, 'monkey_coin', 'completed', $4)
+        INSERT INTO transactions (user_id, type, amount, currency, status, nonce, metadata)
+        VALUES ($1, 'game_reward', $2, 'monkey_coin', 'completed', $3, $4)
       `, [
-        crypto.randomUUID(),
         userId,
         coinsEarned,
+        `game_reward_${userId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         JSON.stringify({ score, username, timestamp: new Date().toISOString() })
       ]);
     }
