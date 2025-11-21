@@ -2122,14 +2122,14 @@ class GameScene extends Phaser.Scene {
         const displayW = this.player.displayWidth;   // 86.8
         const displayH = this.player.displayHeight;  // 84
         
-        // Радиус круга - 40% от ширины (для ступней)
-        const radius = displayW * 0.4;  
+        // ВРЕМЕННО: Увеличиваем хитбокс до 60% чтобы точно не провалиться (ОТЛАДКА!)
+        const radius = displayW * 0.6;  // Было 0.4, стало 0.6
         
         // offsetX - центрируем круг по горизонтали
         const offsetX = (displayW - radius * 2) / 2;
         
-        // offsetY - позиция 70% от верха (там начинаются ноги)
-        const offsetY = displayH * 0.70; // 70% от высоты = область ног/ступней
+        // offsetY - позиция 50% от верха (центр) - ВРЕМЕННО ДЛЯ ОТЛАДКИ
+        const offsetY = displayH * 0.50; // Было 0.70, стало 0.50 (центр)
         
         this.player.body.setCircle(radius, offsetX, offsetY);
         
@@ -2142,10 +2142,16 @@ class GameScene extends Phaser.Scene {
         this.player.setY(playerY);
         
         console.log('🐵 Player start position:', {
+            groundY: ground.y,
+            groundDisplayHeight: ground.displayHeight,
             groundTop,
+            displayH,
+            offsetY,
+            radius,
+            diameter: radius * 2,
             hitboxBottom,
             playerY,
-            displayH
+            'player.body.bottom after': this.player.body.bottom
         });
         
         // ВАЖНО: Все коллизии ВКЛЮЧЕНЫ у игрока (для стояния на земле)
@@ -2164,8 +2170,20 @@ class GameScene extends Phaser.Scene {
         
         this.player.setOrigin(0.5, 0.5);
         this.player.setDepth(10);
-        this.player.setCollideWorldBounds(true); // ФИКС: Включаем коллизию с границами мира
-        this.player.body.maxVelocity.set(300, 1200); // ФИКС: Увеличена максимальная скорость падения (было 800)
+        this.player.setCollideWorldBounds(true);
+        this.player.body.maxVelocity.set(300, 1200);
+        
+        // ОТЛАДКА: Проверяем overlap с землей сразу после создания
+        this.time.delayedCall(100, () => {
+            const isOverlapping = this.physics.overlap(this.player, this.ground);
+            console.log('⚠️ Overlap check after 100ms:', {
+                isOverlapping,
+                playerBodyBottom: this.player.body.bottom,
+                groundBodyTop: this.ground.body.top,
+                playerVelocityY: this.player.body.velocity.y,
+                groundColliderActive: this.groundCollider ? 'YES' : 'NO'
+            });
+        });
 
         // ОТЛАДКА: Улучшенная визуализация хитбокса (ВРЕМЕННО)
         const debugGraphics = this.add.graphics();
