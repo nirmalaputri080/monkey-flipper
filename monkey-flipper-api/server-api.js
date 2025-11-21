@@ -238,6 +238,28 @@ const gameResultLimiter = rateLimit({
       CREATE INDEX IF NOT EXISTS idx_purchases_item ON purchases(user_id, item_id);
     `);
     
+    // Миграция: проверяем что таблица purchases существует
+    await pool.query(`
+      DO $$ 
+      BEGIN
+        -- Проверяем существование таблицы purchases
+        IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='purchases') THEN
+          RAISE NOTICE 'Creating purchases table...';
+          CREATE TABLE purchases (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id VARCHAR(255) NOT NULL,
+            item_id VARCHAR(50) NOT NULL,
+            item_name VARCHAR(255) NOT NULL,
+            price INTEGER NOT NULL,
+            status VARCHAR(20) DEFAULT 'active',
+            purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+          CREATE INDEX idx_purchases_user ON purchases(user_id);
+          CREATE INDEX idx_purchases_item ON purchases(user_id, item_id);
+        END IF;
+      END $$;
+    `);
+    
     console.log('✅ DB ready (player_scores + duels + wallets + transactions + purchases + migrations applied)');
   } catch (err) {
     console.error('DB setup error', err);
@@ -794,6 +816,26 @@ app.get('/api/transactions/:userId', async (req, res) => {
     });
   } catch (err) {
     console.error('Get transactions error', err);
+    return res.status(500).json({ success: false, error: 'DB error' });
+  }
+});
+
+// DEBUG: Проверка структуры БД
+app.get('/api/debug/tables', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public'
+      ORDER BY table_name
+    `);
+    
+    return res.json({
+      success: true,
+      tables: result.rows.map(r => r.table_name)
+    });
+  } catch (err) {
+    console.error('Debug tables error', err);
     return res.status(500).json({ success: false, error: 'DB error' });
   }
 });
