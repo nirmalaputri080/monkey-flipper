@@ -2125,28 +2125,19 @@ class GameScene extends Phaser.Scene {
         
         // ФИКС Phase 2: Круглый hitbox для обезьянки - ЦЕНТРИРОВАННЫЙ
         const displayW = this.player.displayWidth;
-const displayH = this.player.displayHeight;
+        const displayH = this.player.displayHeight;
 
 // Размеры квадратного хитбокса (75% от размера спрайта)
-const bodyWidth = displayW * 0.75;  // 75% от ширины
-const bodyHeight = displayH * 0.75; // 75% от высоты
+        const bodyWidth = displayW * 0.75;  // 75% от ширины
+        const bodyHeight = displayH * 0.75; // 75% от высоты
 
 // Центрируем хитбокс относительно спрайта
-const offsetX = (displayW - bodyWidth) / 2;
-const offsetY = (displayH - bodyHeight) / 2;
+        const offsetX = (displayW - bodyWidth) / 2;
+        const offsetY = (displayH - bodyHeight) / 1.5;
 
-this.player.body.setSize(bodyWidth, bodyHeight);
-this.player.body.setOffset(offsetX, offsetY);
+        this.player.body.setSize(bodyWidth, bodyHeight);
+        this.player.body.setOffset(offsetX, offsetY);
 
-console.log('🐵 Player hitbox (square):', {
-    textureSize: '124x120',
-    scale: 0.7,
-    displaySize: `${displayW.toFixed(1)}x${displayH.toFixed(1)}`,
-    bodyWidth: bodyWidth.toFixed(1),
-    bodyHeight: bodyHeight.toFixed(1),
-    offsetX: offsetX.toFixed(1),
-    offsetY: offsetY.toFixed(1)
-});
         
         this.player.setOrigin(0.5, 0.5);
         this.player.setDepth(10);
