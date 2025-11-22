@@ -2133,7 +2133,7 @@ class GameScene extends Phaser.Scene {
 
 // Центрируем хитбокс относительно спрайта
         const offsetX = (displayW - bodyWidth) / 2;
-        const offsetY = (displayH - bodyHeight) / 1.5;
+        const offsetY = (displayH - bodyHeight);
 
         this.player.body.setSize(bodyWidth, bodyHeight);
         this.player.body.setOffset(offsetX, offsetY);
