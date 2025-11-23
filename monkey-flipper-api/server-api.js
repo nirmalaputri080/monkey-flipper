@@ -4,6 +4,7 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const crypto = require('crypto');
+const cryptoUtils = require('./crypto-utils'); // НОВОЕ: Утилиты шифрования
 require('dotenv').config();
 
 const app = express();
@@ -195,6 +196,8 @@ const gameResultLimiter = rateLimit({
         monkey_coin_balance INTEGER DEFAULT 0,
         stars_balance DECIMAL(20, 8) DEFAULT 0,
         ton_balance DECIMAL(20, 8) DEFAULT 0,
+        stars_address TEXT,
+        ton_address TEXT,
         wallet_address VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -230,7 +233,8 @@ const gameResultLimiter = rateLimit({
         user_id VARCHAR(255) NOT NULL,
         item_id VARCHAR(50) NOT NULL,
         item_name VARCHAR(255) NOT NULL,
-        price INTEGER NOT NULL,
+        price DECIMAL(20, 8) NOT NULL,
+        currency VARCHAR(10) DEFAULT 'monkey',
         status VARCHAR(20) DEFAULT 'active',
         purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -324,6 +328,136 @@ app.post('/api/save-score', gameResultLimiter, async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Save error', err);
+    return res.status(500).json({ success: false, error: 'DB error' });
+  } finally {
+    client.release();
+  }
+});
+
+// ==================== GAME EVENTS (ANTI-CHEAT SYSTEM) ====================
+
+// Функция пересчета score по событиям
+function calculateScoreFromEvents(events) {
+  let calculatedScore = 0;
+  let lastY = 0;
+  let maxY = Infinity; // Меньше = выше (Y инвертирован)
+  
+  for (const event of events) {
+    if (event.type === 'land' && event.platformY !== undefined) {
+      // Игрок приземлился на платформу
+      if (event.platformY < maxY) {
+        // Новая высота достигнута
+        const heightGained = maxY - event.platformY;
+        calculatedScore += Math.floor(heightGained / 10); // 10 пикселей = 1 очко
+        maxY = event.platformY;
+      }
+    }
+  }
+  
+  return Math.max(0, calculatedScore);
+}
+
+// Отправка игровых событий (вместо прямого score)
+app.post('/api/game-events', gameResultLimiter, async (req, res) => {
+  const { userId, username, events, claimedScore } = req.body;
+
+  if (!userId || !username || !Array.isArray(events)) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'userId, username, and events array required' 
+    });
+  }
+
+  // Валидация событий
+  if (events.length > 10000) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Too many events (max 10000)' 
+    });
+  }
+
+  const client = await pool.getClient();
+
+  try {
+    await client.query('BEGIN');
+    
+    // ЗАЩИТА ОТ ЧИТЕРСТВА: Пересчитываем score на сервере
+    const serverScore = calculateScoreFromEvents(events);
+    
+    // Проверяем что клиентский score не сильно отличается (допуск 5%)
+    const scoreDiff = Math.abs(serverScore - claimedScore);
+    const tolerance = serverScore * 0.05;
+    
+    if (scoreDiff > tolerance && scoreDiff > 50) {
+      await client.query('ROLLBACK');
+      console.warn(`⚠️ Score mismatch detected for user ${userId}: server=${serverScore}, claimed=${claimedScore}`);
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Score verification failed',
+        serverScore,
+        claimedScore
+      });
+    }
+    
+    // Используем серверный score (не доверяем клиенту)
+    const finalScore = serverScore;
+    
+    // Сохраняем результат игры
+    const bestResult = await client.query('SELECT MAX(score) as best FROM player_scores WHERE user_id = $1', [userId]);
+    const previousBest = bestResult.rows[0]?.best || 0;
+    const isNewRecord = finalScore > previousBest;
+
+    await client.query('INSERT INTO player_scores (user_id, username, score) VALUES ($1, $2, $3)', [userId, username, finalScore]);
+
+    // Рассчитываем награду: 1 монета за каждые 100 очков
+    const coinsEarned = Math.floor(finalScore / 100);
+    let newBalance = 0;
+    
+    if (coinsEarned > 0) {
+      // Начисляем Monkey Coins
+      const walletResult = await client.query(`
+        INSERT INTO wallets (user_id, monkey_coin_balance) 
+        VALUES ($1, $2)
+        ON CONFLICT (user_id) 
+        DO UPDATE SET monkey_coin_balance = wallets.monkey_coin_balance + $2
+        RETURNING monkey_coin_balance
+      `, [userId, coinsEarned]);
+      
+      newBalance = walletResult.rows[0].monkey_coin_balance;
+      
+      // Записываем транзакцию
+      await client.query(`
+        INSERT INTO transactions (user_id, type, amount, currency, status, nonce, metadata)
+        VALUES ($1, 'game_reward', $2, 'monkey', 'completed', $3, $4)
+      `, [
+        userId,
+        coinsEarned,
+        `game_reward_${userId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        JSON.stringify({ 
+          score: finalScore, 
+          username, 
+          timestamp: new Date().toISOString(),
+          eventsCount: events.length 
+        })
+      ]);
+    }
+    
+    await client.query('COMMIT');
+
+    console.log(`✅ Game events processed: user ${userId}, server score ${finalScore}, events ${events.length}`);
+
+    return res.json({ 
+      success: true, 
+      isNewRecord, 
+      bestScore: Math.max(finalScore, previousBest),
+      coinsEarned,
+      newBalance,
+      serverScore: finalScore,
+      verified: true
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Game events error', err);
     return res.status(500).json({ success: false, error: 'DB error' });
   } finally {
     client.release();
@@ -951,6 +1085,335 @@ app.get('/api/shop/purchases/:userId', async (req, res) => {
   } catch (err) {
     console.error('Get purchases error', err);
     return res.status(500).json({ success: false, error: 'DB error' });
+  }
+});
+
+// ==================== STARS WALLET INTEGRATION ====================
+
+// Подключить STARS кошелек (с шифрованием адреса)
+app.post('/api/wallet/connect-stars', async (req, res) => {
+  const { userId, starsAddress } = req.body;
+  
+  if (!userId || !starsAddress) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'userId and starsAddress required' 
+    });
+  }
+  
+  // Валидация формата адреса (пример, нужно адаптировать под реальный формат STARS)
+  if (!/^[A-Za-z0-9]{32,64}$/.test(starsAddress)) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Invalid STARS address format' 
+    });
+  }
+  
+  try {
+    // Шифруем адрес перед сохранением
+    const encryptedAddress = cryptoUtils.encrypt(starsAddress);
+    
+    // Сохраняем зашифрованный адрес в БД
+    const result = await pool.query(`
+      INSERT INTO wallets (user_id, stars_address, created_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (user_id) 
+      DO UPDATE SET 
+        stars_address = $2,
+        updated_at = NOW()
+      RETURNING user_id, created_at, updated_at
+    `, [userId, encryptedAddress]);
+    
+    console.log(`✅ STARS wallet connected for user ${userId}`);
+    
+    return res.json({
+      success: true,
+      message: 'STARS wallet connected successfully',
+      wallet: {
+        userId: result.rows[0].user_id,
+        // Не возвращаем адрес клиенту в целях безопасности
+        connected: true,
+        connectedAt: result.rows[0].updated_at || result.rows[0].created_at
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Connect STARS wallet error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Failed to connect wallet',
+      details: error.message 
+    });
+  }
+});
+
+// Получить информацию о подключенном STARS кошельке
+app.get('/api/wallet/stars-info/:userId', async (req, res) => {
+  const { userId } = req.params;
+  
+  try {
+    const result = await pool.query(`
+      SELECT stars_address, stars_balance, created_at, updated_at
+      FROM wallets
+      WHERE user_id = $1
+    `, [userId]);
+    
+    if (result.rows.length === 0) {
+      return res.json({
+        success: true,
+        connected: false,
+        message: 'No STARS wallet connected'
+      });
+    }
+    
+    const wallet = result.rows[0];
+    
+    // Расшифровываем адрес только для отображения (последние 8 символов)
+    let maskedAddress = '***';
+    if (wallet.stars_address) {
+      try {
+        const decryptedAddress = cryptoUtils.decrypt(wallet.stars_address);
+        maskedAddress = '...' + decryptedAddress.slice(-8);
+      } catch (err) {
+        console.error('❌ Decryption error:', err);
+      }
+    }
+    
+    return res.json({
+      success: true,
+      connected: !!wallet.stars_address,
+      wallet: {
+        maskedAddress,
+        balance: wallet.stars_balance || 0,
+        connectedAt: wallet.created_at,
+        updatedAt: wallet.updated_at
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Get STARS info error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Failed to get wallet info' 
+    });
+  }
+});
+
+// Покупка предметов за STARS токены
+app.post('/api/shop/purchase-stars', async (req, res) => {
+  const { userId, itemId, itemName, priceStars, signature } = req.body;
+  
+  if (!userId || !itemId || !priceStars) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Missing required fields' 
+    });
+  }
+  
+  // ВАЖНО: В продакшне нужна проверка подписи транзакции
+  // if (!signature || !cryptoUtils.verifySignature({userId, itemId, priceStars}, signature, PUBLIC_KEY)) {
+  //   return res.status(403).json({ success: false, error: 'Invalid signature' });
+  // }
+  
+  const client = await pool.getClient();
+  
+  try {
+    await client.query('BEGIN');
+    
+    // Проверяем баланс STARS
+    const walletResult = await client.query(`
+      SELECT stars_balance, stars_address
+      FROM wallets
+      WHERE user_id = $1
+      FOR UPDATE
+    `, [userId]);
+    
+    if (walletResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Wallet not found. Please connect STARS wallet first.' 
+      });
+    }
+    
+    const currentBalance = walletResult.rows[0].stars_balance || 0;
+    
+    if (currentBalance < priceStars) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Insufficient STARS balance',
+        required: priceStars,
+        current: currentBalance
+      });
+    }
+    
+    // Списываем STARS
+    const newBalance = currentBalance - priceStars;
+    await client.query(`
+      UPDATE wallets
+      SET stars_balance = $1, updated_at = NOW()
+      WHERE user_id = $2
+    `, [newBalance, userId]);
+    
+    // Создаем транзакцию
+    const transactionId = crypto.randomUUID();
+    const nonce = `stars_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
+    
+    await client.query(`
+      INSERT INTO transactions (id, user_id, type, amount, currency, status, nonce, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+    `, [transactionId, userId, 'purchase_stars', priceStars, 'stars', 'completed', nonce]);
+    
+    // Создаем запись о покупке
+    const purchaseId = crypto.randomUUID();
+    await client.query(`
+      INSERT INTO purchases (id, user_id, item_id, item_name, price, currency, status, purchased_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+    `, [purchaseId, userId, itemId, itemName || itemId, priceStars, 'stars', 'active']);
+    
+    await client.query('COMMIT');
+    
+    console.log(`✅ STARS purchase: user ${userId}, item ${itemId}, price ${priceStars}`);
+    
+    return res.json({
+      success: true,
+      newBalance,
+      purchase: {
+        id: purchaseId,
+        itemId,
+        itemName,
+        price: priceStars,
+        currency: 'stars'
+      }
+    });
+    
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('❌ STARS purchase error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Purchase failed',
+      details: error.message 
+    });
+  } finally {
+    client.release();
+  }
+});
+
+// Отправка наград в STARS на кошелек игрока
+app.post('/api/rewards/send-stars', async (req, res) => {
+  const { userId, amount, reason, signature } = req.body;
+  
+  if (!userId || !amount || amount <= 0) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Invalid request' 
+    });
+  }
+  
+  // ВАЖНО: В продакшне проверяем подпись от сервера
+  // if (!signature || !cryptoUtils.verifySignature({userId, amount, reason}, signature, SERVER_PUBLIC_KEY)) {
+  //   return res.status(403).json({ success: false, error: 'Invalid server signature' });
+  // }
+  
+  const client = await pool.getClient();
+  
+  try {
+    await client.query('BEGIN');
+    
+    // Получаем зашифрованный адрес кошелька
+    const walletResult = await client.query(`
+      SELECT stars_address, stars_balance
+      FROM wallets
+      WHERE user_id = $1
+      FOR UPDATE
+    `, [userId]);
+    
+    if (walletResult.rows.length === 0 || !walletResult.rows[0].stars_address) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ 
+        success: false, 
+        error: 'STARS wallet not connected' 
+      });
+    }
+    
+    const encryptedAddress = walletResult.rows[0].stars_address;
+    const currentBalance = walletResult.rows[0].stars_balance || 0;
+    
+    // Расшифровываем адрес для отправки
+    let recipientAddress;
+    try {
+      recipientAddress = cryptoUtils.decrypt(encryptedAddress);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      console.error('❌ Decryption error:', err);
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Failed to decrypt wallet address' 
+      });
+    }
+    
+    // ЗДЕСЬ ДОЛЖЕН БЫТЬ КОД ОТПРАВКИ РЕАЛЬНЫХ STARS ТОКЕНОВ
+    // Пример: await starsAPI.sendTokens(recipientAddress, amount);
+    // Временно ставим статус pending
+    
+    const transactionId = crypto.randomUUID();
+    const nonce = `reward_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
+    
+    // Создаем транзакцию со статусом pending
+    await client.query(`
+      INSERT INTO transactions (
+        id, user_id, type, amount, currency, status, nonce, 
+        metadata, created_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+    `, [
+      transactionId, 
+      userId, 
+      'reward_stars', 
+      amount, 
+      'stars', 
+      'pending',  // Пока API не интегрирован - pending
+      nonce,
+      JSON.stringify({ reason, recipientAddress: '...' + recipientAddress.slice(-8) })
+    ]);
+    
+    // Обновляем баланс (оптимистично, в продакшне - после подтверждения)
+    const newBalance = currentBalance + amount;
+    await client.query(`
+      UPDATE wallets
+      SET stars_balance = $1, updated_at = NOW()
+      WHERE user_id = $2
+    `, [newBalance, userId]);
+    
+    await client.query('COMMIT');
+    
+    console.log(`✅ STARS reward pending: user ${userId}, amount ${amount}, reason: ${reason}`);
+    
+    return res.json({
+      success: true,
+      status: 'pending',
+      message: 'STARS reward is being processed',
+      transaction: {
+        id: transactionId,
+        amount,
+        currency: 'stars',
+        reason
+      },
+      newBalance
+    });
+    
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('❌ Send STARS reward error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Failed to send reward',
+      details: error.message 
+    });
+  } finally {
+    client.release();
   }
 });
 
