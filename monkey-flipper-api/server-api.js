@@ -1417,6 +1417,112 @@ app.post('/api/rewards/send-stars', async (req, res) => {
   }
 });
 
+// ==================== PENDING TRANSACTIONS RETRY (CRON JOB) ====================
+
+// Функция для повторной обработки pending транзакций
+async function retryPendingTransactions() {
+  const client = await pool.getClient();
+  
+  try {
+    // Получаем pending транзакции старше 5 минут, но не старше 24 часов
+    const result = await client.query(`
+      SELECT * FROM transactions
+      WHERE status = 'pending'
+      AND created_at > NOW() - INTERVAL '24 hours'
+      AND created_at < NOW() - INTERVAL '5 minutes'
+      ORDER BY created_at ASC
+      LIMIT 100
+    `);
+    
+    if (result.rows.length === 0) {
+      return;
+    }
+    
+    console.log(`🔄 Найдено ${result.rows.length} pending транзакций для retry`);
+    
+    for (const transaction of result.rows) {
+      try {
+        await client.query('BEGIN');
+        
+        // В зависимости от типа транзакции - разная логика retry
+        if (transaction.type === 'reward_stars') {
+          // Попытка отправить STARS награду снова
+          console.log(`🔄 Retry STARS reward: transaction ${transaction.id}`);
+          
+          // ЗДЕСЬ ДОЛЖЕН БЫТЬ КОД РЕАЛЬНОЙ ОТПРАВКИ STARS
+          // Пока оставляем в pending
+          // await starsAPI.sendTokens(address, amount);
+          
+          // Если успешно:
+          // await client.query(`
+          //   UPDATE transactions 
+          //   SET status = 'completed', completed_at = NOW()
+          //   WHERE id = $1
+          // `, [transaction.id]);
+          
+        } else if (transaction.type === 'purchase_stars') {
+          // Для покупок - проверяем что средства заблокированы
+          console.log(`⚠️  Pending purchase detected: ${transaction.id}`);
+          // Если прошло > 1 час - возвращаем средства
+          const txAge = Date.now() - new Date(transaction.created_at).getTime();
+          if (txAge > 3600000) { // 1 час
+            await client.query(`
+              UPDATE wallets
+              SET stars_balance = stars_balance + $1
+              WHERE user_id = $2
+            `, [transaction.amount, transaction.user_id]);
+            
+            await client.query(`
+              UPDATE transactions
+              SET status = 'failed', completed_at = NOW()
+              WHERE id = $1
+            `, [transaction.id]);
+            
+            console.log(`❌ Transaction ${transaction.id} failed and refunded`);
+          }
+        }
+        
+        await client.query('COMMIT');
+        
+      } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(`❌ Error retrying transaction ${transaction.id}:`, err);
+      }
+    }
+    
+  } catch (error) {
+    console.error('❌ Error in retryPendingTransactions:', error);
+  } finally {
+    client.release();
+  }
+}
+
+// Запускаем retry каждые 5 минут
+setInterval(() => {
+  retryPendingTransactions().catch(err => {
+    console.error('❌ Cron job error:', err);
+  });
+}, 5 * 60 * 1000); // 5 минут
+
+console.log('✅ Pending transactions retry cron job started (every 5 minutes)');
+
+// Endpoint для ручного запуска retry (для дебага)
+app.post('/api/admin/retry-pending', async (req, res) => {
+  try {
+    await retryPendingTransactions();
+    return res.json({ 
+      success: true, 
+      message: 'Pending transactions retry completed' 
+    });
+  } catch (error) {
+    return res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`API server listening on ${PORT}`);
 });
+
