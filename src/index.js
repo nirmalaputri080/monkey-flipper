@@ -287,13 +287,14 @@ class MenuScene extends Phaser.Scene {
 
         // Кнопки - КОМПАКТНЫЕ ДЛЯ ТЕЛЕФОНА
         const buttons = [
-            { text: 'Start', y: CONSTS.HEIGHT / 2 - 60, callback: () => this.scene.start('GameScene') },
-            { text: '1v1 Online', y: CONSTS.HEIGHT / 2 + 0, callback: () => this.scene.start('MatchmakingScene') },
-            { text: 'Duels', y: CONSTS.HEIGHT / 2 + 60, callback: () => this.scene.start('DuelHistoryScene') },
-            { text: 'Leaderboard', y: CONSTS.HEIGHT / 2 + 120, callback: () => this.openLeaderboard() },
-            { text: 'Shop', y: CONSTS.HEIGHT / 2 + 180, callback: () => this.showShop() },
+            { text: 'Start', y: CONSTS.HEIGHT / 2 - 100, callback: () => this.scene.start('GameScene') },
+            { text: '1v1 Online', y: CONSTS.HEIGHT / 2 - 40, callback: () => this.scene.start('MatchmakingScene') },
+            { text: 'Duels', y: CONSTS.HEIGHT / 2 + 20, callback: () => this.scene.start('DuelHistoryScene') },
+            { text: 'Leaderboard', y: CONSTS.HEIGHT / 2 + 80, callback: () => this.openLeaderboard() },
+            { text: '🎁 Free Coins', y: CONSTS.HEIGHT / 2 + 140, callback: () => this.showShop() },
+            { text: '⭐ Web Shop', y: CONSTS.HEIGHT / 2 + 200, callback: () => this.openWebShop() },
             {
-                text: 'Exit', y: CONSTS.HEIGHT / 2 + 240, callback: () => {
+                text: 'Exit', y: CONSTS.HEIGHT / 2 + 260, callback: () => {
                     if (!window.close()) {
                         this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2 + 200, 'Please close the tab', { fontSize: '20px', fill: '#F00' }).setOrigin(0.5);
                     }
@@ -349,10 +350,25 @@ class MenuScene extends Phaser.Scene {
         // Пустой метод для обратной совместимости
     }
 
-    // НОВОЕ: Открыть магазин (ShopScene)
+    // НОВОЕ: Открыть внутриигровой магазин (ShopScene с бесплатными монетами)
     showShop() {
-        console.log('🛒 Opening shop...');
+        console.log('🎁 Opening free coins shop...');
         this.scene.start('ShopScene');
+    }
+    
+    // НОВОЕ: Открыть веб-магазин (shop.html с Telegram Stars)
+    openWebShop() {
+        console.log('⭐ Opening web shop...');
+        const userId = userData?.id || 'unknown';
+        const shopUrl = `${window.location.origin}/shop.html?userId=${userId}`;
+        
+        // Попробуем открыть в Telegram WebApp
+        if (window.Telegram?.WebApp) {
+            window.Telegram.WebApp.openLink(shopUrl);
+        } else {
+            // Фоллбэк: открыть в новой вкладке
+            window.open(shopUrl, '_blank');
+        }
     }
     
     // НОВОЕ: Загрузка баланса Monkey Coins
