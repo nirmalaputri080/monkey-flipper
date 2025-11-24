@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Магазин - Monkey Flipper</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            overflow-x: hidden;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .balance-section {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 30px;
+            gap: 10px;
+        }
+
+        .balance-card {
+            background: rgba(255,255,255,0.15);
+            backdrop-filter: blur(10px);
+            padding: 15px 25px;
+            border-radius: 15px;
+            text-align: center;
+            flex: 1;
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+
+        .balance-card .label {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+
+        .balance-card .amount {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            overflow-x: auto;
+            padding-bottom: 10px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 20px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            background: rgba(255,255,255,0.3);
+            border-color: rgba(255,255,255,0.5);
+            transform: scale(1.05);
+        }
+
+        .items-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 80px;
+        }
+
+        .item-card {
+            background: rgba(255,255,255,0.15);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 15px;
+            text-align: center;
+            border: 2px solid rgba(255,255,255,0.2);
+            transition: transform 0.3s;
+            cursor: pointer;
+        }
+
+        .item-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(255,255,255,0.5);
+        }
+
+        .item-card .icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+
+        .item-card .name {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .item-card .description {
+            font-size: 11px;
+            opacity: 0.8;
+            margin-bottom: 10px;
+            line-height: 1.3;
+        }
+
+        .item-card .price {
+            font-size: 16px;
+            font-weight: bold;
+            padding: 8px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+        }
+
+        .item-card .price.coins {
+            color: #FFD700;
+        }
+
+        .item-card .price.stars {
+            color: #00D8FF;
+        }
+
+        .back-button {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 40px;
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 25px;
+            color: #fff;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .back-button:hover {
+            background: rgba(255,255,255,0.3);
+            transform: translateX(-50%) scale(1.05);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 18px;
+        }
+
+        .error {
+            background: rgba(255,0,0,0.2);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 30px;
+            border-radius: 20px;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+            border: 2px solid rgba(255,255,255,0.3);
+        }
+
+        .modal-content .icon {
+            font-size: 72px;
+            margin-bottom: 15px;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .modal-button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .modal-button:hover {
+            transform: scale(1.05);
+        }
+
+        .modal-button.buy {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .modal-button.cancel {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🛍️ Магазин</h1>
+    </div>
+
+    <div class="balance-section">
+        <div class="balance-card">
+            <div class="label">Monkey Coins</div>
+            <div class="amount" id="coinsBalance">...</div>
+        </div>
+        <div class="balance-card">
+            <div class="label">STARS</div>
+            <div class="amount" id="starsBalance">...</div>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <div class="tab active" data-category="all">Всё</div>
+        <div class="tab" data-category="skins">Скины</div>
+        <div class="tab" data-category="nfts">NFT</div>
+        <div class="tab" data-category="boosts">Бусты</div>
+    </div>
+
+    <div id="shopContent" class="items-grid">
+        <div class="loading">Загрузка магазина...</div>
+    </div>
+
+    <button class="back-button" onclick="goBack()">⬅️ Назад в игру</button>
+
+    <!-- Модальное окно подтверждения покупки -->
+    <div id="buyModal" class="modal">
+        <div class="modal-content">
+            <div class="icon" id="modalIcon">🎨</div>
+            <h2 id="modalTitle">Купить предмет?</h2>
+            <p id="modalDescription"></p>
+            <p id="modalPrice"></p>
+            <div class="modal-buttons">
+                <button class="modal-button cancel" onclick="closeModal()">Отмена</button>
+                <button class="modal-button buy" onclick="confirmBuy()">Купить</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Конфигурация API
+        const API_URL = window.location.hostname === 'localhost'
+            ? 'http://localhost:3001'
+            : 'https://monkey-flipper-djm1.onrender.com';
+
+        // Telegram WebApp
+        const tg = window.Telegram?.WebApp;
+        if (tg) {
+            tg.ready();
+            tg.expand();
+        }
+
+        // Состояние
+        let userId = null;
+        let jwt = null;
+        let shopItems = [];
+        let selectedItem = null;
+        let currentCategory = 'all';
+
+        // Инициализация
+        async function init() {
+            try {
+                // Получаем userId из Telegram
+                if (tg?.initDataUnsafe?.user) {
+                    userId = tg.initDataUnsafe.user.id;
+                } else {
+                    // Для тестирования без Telegram
+                    userId = 123456;
+                    console.warn('⚠️ Telegram не обнаружен, используем тестовый userId');
+                }
+
+                // Аутентификация
+                await authenticate();
+
+                // Загружаем данные
+                await Promise.all([
+                    loadBalance(),
+                    loadShopItems()
+                ]);
+
+                setupTabs();
+            } catch (error) {
+                showError('Ошибка инициализации: ' + error.message);
+            }
+        }
+
+        // Аутентификация
+        async function authenticate() {
+            try {
+                const initData = tg?.initData || 'test_mode';
+                const response = await fetch(`${API_URL}/api/auth/telegram`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initData })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    jwt = data.token;
+                    userId = data.userId;
+                    console.log('✅ Аутентификация успешна');
+                } else {
+                    throw new Error(data.error || 'Ошибка аутентификации');
+                }
+            } catch (error) {
+                console.error('❌ Ошибка аутентификации:', error);
+                throw error;
+            }
+        }
+
+        // Загрузка баланса
+        async function loadBalance() {
+            try {
+                const response = await fetch(`${API_URL}/api/wallet/balance?userId=${userId}`, {
+                    headers: { 'Authorization': `Bearer ${jwt}` }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('coinsBalance').textContent = data.balance.coins.toLocaleString();
+                    document.getElementById('starsBalance').textContent = data.balance.stars.toLocaleString();
+                }
+            } catch (error) {
+                console.error('❌ Ошибка загрузки баланса:', error);
+            }
+        }
+
+        // Загрузка товаров
+        async function loadShopItems() {
+            try {
+                const response = await fetch(`${API_URL}/api/shop/items`, {
+                    headers: { 'Authorization': `Bearer ${jwt}` }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    shopItems = data.items;
+                    renderItems();
+                }
+            } catch (error) {
+                showError('Ошибка загрузки магазина: ' + error.message);
+            }
+        }
+
+        // Отрисовка товаров
+        function renderItems() {
+            const container = document.getElementById('shopContent');
+            const filtered = currentCategory === 'all' 
+                ? shopItems 
+                : shopItems.filter(item => item.category === currentCategory);
+
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="loading">Товары не найдены</div>';
+                return;
+            }
+
+            container.innerHTML = filtered.map(item => {
+                let priceHtml = '';
+                
+                // Показываем разные варианты оплаты
+                if (item.currency === 'both') {
+                    priceHtml = `
+                        <div class="price coins" style="margin-bottom: 5px">
+                            🪙 ${item.priceCoins || item.priceStars * 20} Coins
+                        </div>
+                        <div class="price stars" style="margin-bottom: 5px">
+                            💰 ${item.priceStars} STARS
+                        </div>
+                        <div class="price" style="background: linear-gradient(135deg, #667eea, #764ba2); color: #fff">
+                            ⭐ ${item.priceXTR} XTR
+                        </div>
+                    `;
+                } else if (item.currency === 'coins') {
+                    priceHtml = `<div class="price coins">🪙 ${item.priceCoins}</div>`;
+                } else {
+                    priceHtml = `<div class="price stars">💰 ${item.priceStars || item.price} STARS</div>`;
+                }
+                
+                return `
+                    <div class="item-card" onclick="showBuyModal('${item.id}')">
+                        <div class="icon">${getItemIcon(item.category)}</div>
+                        <div class="name">${item.name}</div>
+                        <div class="description">${item.description}</div>
+                        ${priceHtml}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Иконки для категорий
+        function getItemIcon(category) {
+            const icons = {
+                skins: '🎨',
+                nfts: '🖼️',
+                boosts: '⚡',
+                cosmetic: '✨'
+            };
+            return icons[category] || '🎁';
+        }
+
+        // Показать модальное окно покупки
+        function showBuyModal(itemId) {
+            selectedItem = shopItems.find(item => item.id === itemId);
+            if (!selectedItem) return;
+
+            document.getElementById('modalIcon').textContent = getItemIcon(selectedItem.category);
+            document.getElementById('modalTitle').textContent = selectedItem.name;
+            document.getElementById('modalDescription').textContent = selectedItem.description;
+            
+            // Показываем все варианты оплаты
+            let priceText = 'Цена:<br>';
+            if (selectedItem.currency === 'both') {
+                priceText += `
+                    🪙 <strong>${selectedItem.priceCoins || selectedItem.priceStars * 20} Monkey Coins</strong><br>
+                    💰 <strong>${selectedItem.priceStars} STARS (игровые)</strong><br>
+                    ⭐ <strong>${selectedItem.priceXTR} Telegram Stars (XTR)</strong>
+                `;
+            } else if (selectedItem.currency === 'coins') {
+                priceText += `🪙 <strong>${selectedItem.priceCoins} Monkey Coins</strong>`;
+            } else {
+                priceText += `💰 <strong>${selectedItem.priceStars || selectedItem.price} STARS</strong>`;
+            }
+            
+            document.getElementById('modalPrice').innerHTML = priceText;
+
+            document.getElementById('buyModal').classList.add('active');
+
+            // Вибрация при открытии модалки
+            if (tg?.HapticFeedback) {
+                tg.HapticFeedback.impactOccurred('light');
+            }
+        }
+
+        // Закрыть модальное окно
+        function closeModal() {
+            document.getElementById('buyModal').classList.remove('active');
+            selectedItem = null;
+            selectedPaymentMethod = null;
+        }
+        
+        let selectedPaymentMethod = null;
+
+        // Подтверждение покупки
+        async function confirmBuy() {
+            if (!selectedItem) return;
+            
+            // Если есть несколько способов оплаты - спрашиваем какой выбрать
+            if (selectedItem.currency === 'both' && !selectedPaymentMethod) {
+                const choice = prompt('Выберите способ оплаты:\n1 - Monkey Coins\n2 - STARS (игровые)\n3 - Telegram Stars (XTR)', '1');
+                if (choice === '1') selectedPaymentMethod = 'coins';
+                else if (choice === '2') selectedPaymentMethod = 'stars';
+                else if (choice === '3') selectedPaymentMethod = 'xtr';
+                else return;
+            }
+
+            try {
+                let endpoint, body;
+                
+                if (selectedPaymentMethod === 'xtr' || (selectedItem.currency === 'xtr')) {
+                    // Покупка за Telegram Stars (XTR) - создаем инвойс
+                    endpoint = '/api/shop/create-stars-invoice';
+                    body = {
+                        userId: userId,
+                        itemId: selectedItem.id
+                    };
+                } else if (selectedPaymentMethod === 'coins' || selectedItem.currency === 'coins') {
+                    // Покупка за Monkey Coins
+                    endpoint = '/api/shop/buy';
+                    body = {
+                        userId: userId,
+                        itemId: selectedItem.id
+                    };
+                } else {
+                    // Покупка за игровые STARS
+                    endpoint = '/api/shop/buy-stars';
+                    body = {
+                        userId: userId,
+                        itemId: selectedItem.id,
+                        signature: 'client_signature_placeholder'
+                    };
+                }
+
+                const response = await fetch(`${API_URL}${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${jwt}`
+                    },
+                    body: JSON.stringify(body)
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    if (data.invoice) {
+                        // Telegram Stars (XTR) - показываем инвойс
+                        if (tg?.HapticFeedback) {
+                            tg.HapticFeedback.notificationOccurred('success');
+                        }
+                        alert(`✅ Инвойс создан!\nПлатеж будет обработан через Telegram Stars.\nСумма: ${selectedItem.priceXTR} XTR`);
+                        closeModal();
+                        // TODO: Открыть инвойс в Telegram
+                    } else {
+                        // Обычная покупка за Coins/STARS
+                        if (tg?.HapticFeedback) {
+                            tg.HapticFeedback.notificationOccurred('success');
+                        }
+                        
+                        const balanceText = data.newBalance ? `\nНовый баланс: ${data.newBalance.toLocaleString()}` : '';
+                        alert(`✅ Куплено: ${selectedItem.name}!${balanceText}`);
+                        
+                        // Обновляем баланс
+                        await loadBalance();
+                        closeModal();
+                    }
+                } else {
+                    throw new Error(data.error || 'Ошибка покупки');
+                }
+            } catch (error) {
+                if (tg?.HapticFeedback) {
+                    tg.HapticFeedback.notificationOccurred('error');
+                }
+                alert('❌ ' + error.message);
+            }
+        }
+
+        // Настройка табов
+        function setupTabs() {
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    currentCategory = tab.dataset.category;
+                    renderItems();
+
+                    if (tg?.HapticFeedback) {
+                        tg.HapticFeedback.impactOccurred('light');
+                    }
+                });
+            });
+        }
+
+        // Показать ошибку
+        function showError(message) {
+            document.getElementById('shopContent').innerHTML = `
+                <div class="error">${message}</div>
+            `;
+        }
+
+        // Вернуться в игру
+        function goBack() {
+            window.location.href = 'index.html';
+        }
+
+        // Запуск при загрузке
+        init();
+    </script>
+</body>
+</html>

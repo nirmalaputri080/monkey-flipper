@@ -4,8 +4,10 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const crypto = require('crypto');
+const fs = require('fs');
 const cryptoUtils = require('./crypto-utils'); // Утилиты шифрования
-const starsAPI = require('./stars-api'); // STARS API интеграция
+const starsAPI = require('./stars-api'); // STARS API интеграция (игровая валюта)
+const telegramStars = require('./telegram-stars-real'); // Telegram Stars (XTR) - реальные платежи
 require('dotenv').config();
 
 const app = express();
@@ -1048,7 +1050,6 @@ app.get('/api/debug/tables', async (req, res) => {
 // ==================== SHOP ENDPOINTS ====================
 
 // Загружаем каталог товаров
-const fs = require('fs');
 const path = require('path');
 const SHOP_ITEMS = JSON.parse(
   fs.readFileSync(path.join(__dirname, 'shop-items.json'), 'utf-8')
@@ -1737,7 +1738,101 @@ app.post('/api/admin/retry-pending', async (req, res) => {
   }
 });
 
+// ==================== TELEGRAM STARS (XTR) - РЕАЛЬНЫЕ ПЛАТЕЖИ ====================
+
+/**
+ * Создать инвойс для покупки за Telegram Stars (XTR)
+ */
+app.post('/api/shop/create-stars-invoice', authenticateJWT, async (req, res) => {
+  try {
+    const { userId, itemId } = req.body;
+    
+    if (!userId || !itemId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'userId и itemId обязательны' 
+      });
+    }
+    
+    // Загружаем товар
+    const shopItems = JSON.parse(fs.readFileSync('./shop-items.json', 'utf8'));
+    const allItems = [...shopItems.skins, ...shopItems.nft_characters, ...shopItems.boosts];
+    const item = allItems.find(i => i.id === itemId);
+    
+    if (!item) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Товар не найден' 
+      });
+    }
+    
+    if (!item.priceXTR) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Этот товар нельзя купить за Telegram Stars' 
+      });
+    }
+    
+    // Создаем инвойс через Telegram Bot API
+    const invoice = await telegramStars.createStarsInvoice(
+      userId,
+      item.name,
+      item.description,
+      item.priceXTR
+    );
+    
+    console.log(`✅ Инвойс создан: ${item.name} за ${item.priceXTR} XTR`);
+    
+    res.json({
+      success: true,
+      invoice,
+      item: {
+        id: item.id,
+        name: item.name,
+        price: item.priceXTR,
+        currency: 'XTR'
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Ошибка создания инвойса:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+/**
+ * Проверка баланса Telegram Stars бота
+ */
+app.get('/api/stars/balance', authenticateJWT, async (req, res) => {
+  try {
+    const balance = await telegramStars.getStarsBalance();
+    
+    res.json({
+      success: true,
+      balance,
+      currency: 'XTR'
+    });
+    
+  } catch (error) {
+    console.error('❌ Ошибка получения баланса Stars:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Настройка обработчиков платежей Telegram Stars
+telegramStars.setupPaymentHandler(app);
+
+console.log('✅ Telegram Stars (XTR) обработчики подключены');
+
 app.listen(PORT, () => {
   console.log(`API server listening on ${PORT}`);
+  console.log(`💰 Игровые STARS: Включены (виртуальная валюта)`);
+  console.log(`⭐ Telegram Stars (XTR): Включены (реальные платежи)`);
 });
 

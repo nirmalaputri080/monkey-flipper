@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STARS Integration - Test Client</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .response {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .response.success {
+            border-left-color: #4caf50;
+            background: #e8f5e9;
+        }
+        
+        .response.error {
+            border-left-color: #f44336;
+            background: #ffebee;
+            color: #c62828;
+        }
+        
+        .catalog-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .catalog-item {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #e0e0e0;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        
+        .catalog-item:hover {
+            transform: scale(1.05);
+            border-color: #667eea;
+        }
+        
+        .catalog-item h3 {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #667eea;
+        }
+        
+        .catalog-item .price {
+            font-weight: bold;
+            color: #764ba2;
+            margin-top: 8px;
+        }
+        
+        .catalog-item .rarity {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-top: 5px;
+            background: #e0e0e0;
+            color: #666;
+        }
+        
+        .catalog-item .rarity.legendary {
+            background: #ffd700;
+            color: #000;
+        }
+        
+        .catalog-item .rarity.mythic {
+            background: #ff1493;
+            color: white;
+        }
+        
+        .catalog-item .rarity.epic {
+            background: #9c27b0;
+            color: white;
+        }
+        
+        .catalog-item .rarity.rare {
+            background: #2196f3;
+            color: white;
+        }
+        
+        .info-box {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .info-box h3 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+        
+        .info-box p {
+            color: #856404;
+            line-height: 1.6;
+        }
+        
+        .api-url {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .api-url input {
+            width: 500px;
+            max-width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🌟 STARS Integration Test Client</h1>
+            <p class="subtitle">Тестирование Crypto All-Stars API</p>
+        </header>
+        
+        <div class="api-url">
+            <label for="apiUrl">API URL:</label>
+            <input type="text" id="apiUrl" value="http://localhost:3001" placeholder="http://localhost:3001">
+        </div>
+        
+        <div class="info-box">
+            <h3>ℹ️ Информация</h3>
+            <p><strong>User ID для тестов:</strong> test_user_12345</p>
+            <p>Этот клиент позволяет тестировать все STARS endpoints без реального кошелька</p>
+        </div>
+        
+        <div class="grid">
+            <!-- Каталог магазина -->
+            <div class="card">
+                <h2>🛒 Каталог магазина</h2>
+                <div class="form-group">
+                    <label for="catalogCategory">Категория:</label>
+                    <select id="catalogCategory">
+                        <option value="">Все категории</option>
+                        <option value="skins">Скины</option>
+                        <option value="nft_characters">NFT персонажи</option>
+                        <option value="boosts">Бусты</option>
+                        <option value="monkey_coin_items">Monkey Coin предметы</option>
+                    </select>
+                </div>
+                <button onclick="getCatalog()">Загрузить каталог</button>
+                <div id="catalogResponse" class="response" style="display:none;"></div>
+                <div id="catalogGrid" class="catalog-grid"></div>
+            </div>
+            
+            <!-- Кошелек пользователя -->
+            <div class="card">
+                <h2>💰 Кошелек</h2>
+                <div class="form-group">
+                    <label for="walletUserId">User ID:</label>
+                    <input type="text" id="walletUserId" value="test_user_12345">
+                </div>
+                <button onclick="getWallet()">Получить баланс</button>
+                <div id="walletResponse" class="response" style="display:none;"></div>
+            </div>
+            
+            <!-- STARS Кошелек -->
+            <div class="card">
+                <h2>⭐ STARS Кошелек</h2>
+                <div class="form-group">
+                    <label for="starsUserId">User ID:</label>
+                    <input type="text" id="starsUserId" value="test_user_12345">
+                </div>
+                <button onclick="getStarsInfo()">Инфо о STARS</button>
+                <div id="starsResponse" class="response" style="display:none;"></div>
+            </div>
+            
+            <!-- Подключить STARS -->
+            <div class="card">
+                <h2>🔗 Подключить STARS</h2>
+                <div class="form-group">
+                    <label for="connectUserId">User ID:</label>
+                    <input type="text" id="connectUserId" value="test_user_12345">
+                </div>
+                <div class="form-group">
+                    <label for="starsAddress">STARS Адрес:</label>
+                    <input type="text" id="starsAddress" value="STARSxxx1234567890abcdefghijklmnopqrstuvwxyz">
+                </div>
+                <button onclick="connectStars()">Подключить</button>
+                <div id="connectResponse" class="response" style="display:none;"></div>
+            </div>
+            
+            <!-- Таблица лидеров -->
+            <div class="card">
+                <h2>🏆 Лидеры</h2>
+                <button onclick="getLeaderboard()">Загрузить топ-10</button>
+                <div id="leaderboardResponse" class="response" style="display:none;"></div>
+            </div>
+            
+            <!-- Транзакции -->
+            <div class="card">
+                <h2>📜 Транзакции</h2>
+                <div class="form-group">
+                    <label for="transUserId">User ID:</label>
+                    <input type="text" id="transUserId" value="test_user_12345">
+                </div>
+                <button onclick="getTransactions()">Получить историю</button>
+                <div id="transResponse" class="response" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function getApiUrl() {
+            return document.getElementById('apiUrl').value;
+        }
+        
+        function showResponse(elementId, data, isSuccess = true) {
+            const el = document.getElementById(elementId);
+            el.style.display = 'block';
+            el.className = 'response ' + (isSuccess ? 'success' : 'error');
+            el.textContent = JSON.stringify(data, null, 2);
+        }
+        
+        async function getCatalog() {
+            const category = document.getElementById('catalogCategory').value;
+            const url = category ? 
+                `${getApiUrl()}/api/shop/catalog?category=${category}` : 
+                `${getApiUrl()}/api/shop/catalog`;
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                showResponse('catalogResponse', data, response.ok);
+                
+                // Отобразить товары
+                const grid = document.getElementById('catalogGrid');
+                grid.innerHTML = '';
+                
+                if (data.items) {
+                    data.items.forEach(item => {
+                        const div = document.createElement('div');
+                        div.className = 'catalog-item';
+                        div.innerHTML = `
+                            <h3>${item.name}</h3>
+                            <div class="rarity ${item.rarity || ''}">${item.rarity || 'common'}</div>
+                            <p style="font-size: 12px; margin-top: 8px;">${item.description}</p>
+                            <div class="price">${item.price} ${item.currency.toUpperCase()}</div>
+                        `;
+                        grid.appendChild(div);
+                    });
+                } else if (data.catalog) {
+                    // Показать все категории
+                    Object.keys(data.catalog).forEach(cat => {
+                        const items = data.catalog[cat];
+                        items.forEach(item => {
+                            const div = document.createElement('div');
+                            div.className = 'catalog-item';
+                            div.innerHTML = `
+                                <h3>${item.name}</h3>
+                                <div class="rarity ${item.rarity || ''}">${item.rarity || 'common'}</div>
+                                <p style="font-size: 12px; margin-top: 8px;">${item.description}</p>
+                                <div class="price">${item.price} ${item.currency.toUpperCase()}</div>
+                            `;
+                            grid.appendChild(div);
+                        });
+                    });
+                }
+            } catch (error) {
+                showResponse('catalogResponse', { error: error.message }, false);
+            }
+        }
+        
+        async function getWallet() {
+            const userId = document.getElementById('walletUserId').value;
+            
+            try {
+                const response = await fetch(`${getApiUrl()}/api/wallet/${userId}`);
+                const data = await response.json();
+                showResponse('walletResponse', data, response.ok);
+            } catch (error) {
+                showResponse('walletResponse', { error: error.message }, false);
+            }
+        }
+        
+        async function getStarsInfo() {
+            const userId = document.getElementById('starsUserId').value;
+            
+            try {
+                const response = await fetch(`${getApiUrl()}/api/wallet/stars-info/${userId}`);
+                const data = await response.json();
+                showResponse('starsResponse', data, response.ok);
+            } catch (error) {
+                showResponse('starsResponse', { error: error.message }, false);
+            }
+        }
+        
+        async function connectStars() {
+            const userId = document.getElementById('connectUserId').value;
+            const starsAddress = document.getElementById('starsAddress').value;
+            
+            try {
+                const response = await fetch(`${getApiUrl()}/api/wallet/connect-stars`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, starsAddress })
+                });
+                const data = await response.json();
+                showResponse('connectResponse', data, response.ok);
+            } catch (error) {
+                showResponse('connectResponse', { error: error.message }, false);
+            }
+        }
+        
+        async function getLeaderboard() {
+            try {
+                const response = await fetch(`${getApiUrl()}/api/leaderboard`);
+                const data = await response.json();
+                showResponse('leaderboardResponse', data, response.ok);
+            } catch (error) {
+                showResponse('leaderboardResponse', { error: error.message }, false);
+            }
+        }
+        
+        async function getTransactions() {
+            const userId = document.getElementById('transUserId').value;
+            
+            try {
+                const response = await fetch(`${getApiUrl()}/api/transactions/${userId}`);
+                const data = await response.json();
+                showResponse('transResponse', data, response.ok);
+            } catch (error) {
+                showResponse('transResponse', { error: error.message }, false);
+            }
+        }
+        
+        // Автозагрузка каталога при загрузке страницы
+        window.addEventListener('load', () => {
+            getCatalog();
+        });
+    </script>
+</body>
+</html>
