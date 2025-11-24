@@ -399,11 +399,19 @@
                 });
 
                 const data = await response.json();
-                if (data.success) {
-                    shopItems = data.items;
+                if (data.success && data.items) {
+                    // Преобразуем объект с категориями в плоский массив
+                    shopItems = [];
+                    if (data.items.skins) shopItems = shopItems.concat(data.items.skins);
+                    if (data.items.nft_characters) shopItems = shopItems.concat(data.items.nft_characters);
+                    if (data.items.boosts) shopItems = shopItems.concat(data.items.boosts);
+                    if (data.items.monkey_coin_items) shopItems = shopItems.concat(data.items.monkey_coin_items);
+                    
+                    console.log('✅ Загружено товаров:', shopItems.length);
                     renderItems();
                 }
             } catch (error) {
+                console.error('❌ Ошибка:', error);
                 showError('Ошибка загрузки магазина: ' + error.message);
             }
         }
