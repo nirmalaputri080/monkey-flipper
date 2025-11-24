@@ -21,6 +21,7 @@ const BOT_TOKEN = process.env.BOT_TOKEN || ''; // Telegram Bot Token
 const ALLOWED_ORIGINS = [
   'https://t.me',
   'https://web.telegram.org',
+  'https://monkey-flipper-test-key-1.vercel.app',
   process.env.FRONTEND_URL || 'http://localhost:3000'
 ].filter(Boolean);
 

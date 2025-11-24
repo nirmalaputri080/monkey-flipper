@@ -244,6 +244,9 @@
 <body>
     <div class="header">
         <h1>🛍️ Магазин</h1>
+        <button onclick="goToGame()" style="margin-top: 10px; padding: 10px 20px; background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.3); border-radius: 10px; color: white; font-size: 16px; cursor: pointer;">
+            🎮 Вернуться в игру
+        </button>
     </div>
 
     <div class="balance-section">
@@ -303,6 +306,17 @@
         let shopItems = [];
         let selectedItem = null;
         let currentCategory = 'all';
+
+        // Переход в игру
+        function goToGame() {
+            if (tg) {
+                // Закрываем Web App и возвращаемся к боту
+                tg.close();
+            } else {
+                // В браузере - открываем главную страницу
+                window.location.href = '/index.html';
+            }
+        }
 
         // Инициализация
         async function init() {
