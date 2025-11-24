@@ -1,0 +1,93 @@
+🔐 Генерация ключей безопасности для STARS интеграции
+
+======================================================================
+
+📦 1. AES-256 Ключ шифрования (для ENCRYPTION_KEY):
+----------------------------------------------------------------------
+c87fd1434d2f42702c606b475926834249ae4dcd41eccfbf672f27b31c252c13
+
+Добавьте в .env файл:
+ENCRYPTION_KEY=c87fd1434d2f42702c606b475926834249ae4dcd41eccfbf672f27b31c252c13
+
+
+🔑 2. JWT Secret (для JWT_SECRET):
+----------------------------------------------------------------------
+e9ce85b3d5427e0e1239fcfabe332275b531e1584e263f3ce9cb1709803f36fd3de80c18156fe12217403eb7d737c4d2eda592f1d6431cc05001b43cb8750493
+
+Добавьте в .env файл:
+JWT_SECRET=e9ce85b3d5427e0e1239fcfabe332275b531e1584e263f3ce9cb1709803f36fd3de80c18156fe12217403eb7d737c4d2eda592f1d6431cc05001b43cb8750493
+
+
+🔐 3. RSA Ключи для клиентских подписей (CLIENT):
+----------------------------------------------------------------------
+CLIENT_PRIVATE_KEY (храните на клиенте в безопасности):
+-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDdFE8Oxhweu0r5\nxPnHJ4QFMoTff7Bq0aUI++9wagrORcHvoroqr3vvMSBDhLUS1cKAaLzt+sw5wpu6\n4hCz88It3kHYuboHk+i3Fsc5JMASfOrT7wSoYeN5iGDe4PtnwGBFh2KMrC5kgG7O\nEahB2JmyvKQxqVhexYGk4INB+nI+9zklX0HicwqEecGCEMMRcCPaQ0WirGAJuNgY\nOkUoTJYpXp9+JEiQCJoWWgQypUQpRMWnOU7Jk8lxpyswWyk9VEzXZZnWSXUQIvGB\nAehfqGHyOdgysSeQCnH4EPFiXoW8QDvuWUwWXbLXiJoGP0A++I7xKSpR7VjyN3zx\n+g+ExG7HAgMBAAECggEADskP7H4FXWzLO98XkWEsLCjPyB7DDrHMpsgqoEsHQ/pY\nWQ16A+bOlBWmAb37WjIfmvTmRcgzJl3EioAZ+97+ipDFuJfbQCx9MNl+I204x0PB\ndMEUf6pkSzl6uQ004yBzj9LZHW1agPAx+OgnZ5fz14dUN9oKhfQRkpRNUvlL8Lf6\nJ2y4hqoHKK4Qc/Ahw+fkb/SKBxIWnnffKj1UZyQBkDQU1bs1tW/GpUnxefLv2UAY\n4vZ08RHvLuPMkVZTk8Kp+VvLdnW0NrVbmfbOWqyeEZph5PRoTJQfOZ7vhckN36Vx\n5SFyN5b5uoXy0Npzldwyr9UH6Dgr9+Ir5Sb9sX2jiQKBgQD52l9ToZ51/0mmZgz8\n6vMB13o5Iqhm/0XRCmkvbmZmst1qXOyA5W/gXw/HERE7u6ILBIZXs4PScLneObxm\nPk7A/IGmcjuGW9KkDv2RuyECKSzHCkVT6EQrEt/btHGlXqXqbzRmjqm2/ce4MbGg\nC5z6DL06FivgSnGhu821S2UvHQKBgQDihLawyTzoAGonua5IZZbA8lDY5ACaclPc\nAEuz+6RgoTipx8sdx5jHcB2DKwQg8s7RlhAhdZDa+nHb4OYVDbnsk5ahMlcE7vrV\nkw1BloM+A1C7dFVTN9dX6Ck/7J8KBxUtEz7eHDjXm9xBZYFGs8ACslMSchHyI8OI\nbeaQg9J8MwKBgQDWj8k9MJW8DzdYRlrw93MoKbs0RacIjD+QfLhHmy8lEoVCSfpv\n1ph0vi32bZm3CjLl80TLG8Yged2kEUDRLMDEyhMstPyZLVF+wcDP3TtDd8iURSW0\nIMopk1PagOL3eIhTApylVe44z0crzsETB+YOddIqh8+2FTfwBC9reQuzoQKBgGYQ\n2qjJ5FG9bhe8SNWCQO1rwhYYllUBUtv8nh/ZMXYA7yFBTzp551NmJ0YlKdUW0y4I\n6ffJm52v34Ht0n6GEtKQpfy4TBGDBS8a9YwqH7TflY8BmjjHHpcTmxKcsgS4sEgB\nNgCqwsoUBqjI7flHoSsV4uyazY9HoiFlM9DGNR+VAoGAWh3HoVF83DJsAlgpeQM8\nGG5aV9l9NBAq2vZm7MUbog9eOr0J1yMbtXmx4p39h9rq29PgdZUe3dgX2gIPUosq\nCEIUvne5HgRPX4GHKTWptcD1VNfrcQvw0y1SFxv6haMFIPZCAa4aGz680ICYJYMu\nspn29UNpcWxlexKzfDWCPgY=\n-----END PRIVATE KEY-----\n
+
+CLIENT_PUBLIC_KEY (для server-api.js):
+-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3RRPDsYcHrtK+cT5xyeE\nBTKE33+watGlCPvvcGoKzkXB76K6Kq977zEgQ4S1EtXCgGi87frMOcKbuuIQs/PC\nLd5B2Lm6B5PotxbHOSTAEnzq0+8EqGHjeYhg3uD7Z8BgRYdijKwuZIBuzhGoQdiZ\nsrykMalYXsWBpOCDQfpyPvc5JV9B4nMKhHnBghDDEXAj2kNFoqxgCbjYGDpFKEyW\nKV6ffiRIkAiaFloEMqVEKUTFpzlOyZPJcacrMFspPVRM12WZ1kl1ECLxgQHoX6hh\n8jnYMrEnkApx+BDxYl6FvEA77llMFl2y14iaBj9APviO8SkqUe1Y8jd88foPhMRu\nxwIDAQAB\n-----END PUBLIC KEY-----\n
+
+Добавьте в .env файл:
+CLIENT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3RRPDsYcHrtK+cT5xyeE\nBTKE33+watGlCPvvcGoKzkXB76K6Kq977zEgQ4S1EtXCgGi87frMOcKbuuIQs/PC\nLd5B2Lm6B5PotxbHOSTAEnzq0+8EqGHjeYhg3uD7Z8BgRYdijKwuZIBuzhGoQdiZ\nsrykMalYXsWBpOCDQfpyPvc5JV9B4nMKhHnBghDDEXAj2kNFoqxgCbjYGDpFKEyW\nKV6ffiRIkAiaFloEMqVEKUTFpzlOyZPJcacrMFspPVRM12WZ1kl1ECLxgQHoX6hh\n8jnYMrEnkApx+BDxYl6FvEA77llMFl2y14iaBj9APviO8SkqUe1Y8jd88foPhMRu\nxwIDAQAB\n-----END PUBLIC KEY-----\n"
+
+
+🔐 4. RSA Ключи для серверных подписей (SERVER):
+----------------------------------------------------------------------
+SERVER_PRIVATE_KEY (держите в секрете!):
+-----BEGIN PRIVATE KEY-----\nMIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQC7M1HczxPCw2lj\nObDmqDEPkdLvGUT4WwS2l529aRu0Qp2MmSpkVJ1uxDqkhXjr/VjKrTTgqoORdtaj\nkTgKbdXJ5FNvoZAdtISianPySlBTi3Ly7cTNoBcF9tblm1DjntxTFsRjWdlVWyVW\nXIZ9GP3jTJ6GEkJymaQiA7xvrdojeJbmt4asxn7groyst6zZMcK5aZUUuc9aOPEi\nCtmOekaXCYoZoq6IdaGcQvU0gOEzKgjygvQf3fHhfq7FHDhJvc7krrZlK4BCuJx/\n2zgZ5PwbwCbVE24fsr/H9/JTtpEolZ1yWYPqr/0zvQrxw8Pyai9zt3ec2RArm7QS\nM4K1sDkHAgMBAAECggEAVdaDbA+cDQuTsIcMocdvr6b7JN3ebU83Cw7cqrSemnqN\nSaIV+Sl/gwIBrdzyBKwH4e+oNniZmcL3SstU+htBE7FZvO9FaQmUY/ESN4Bx8s0X\nqWLzgiItTHPSODiOz8DRYFwpMzFI4cXIiiAlHwmtqWNBsVKAG5Jt25cA+eirBOYG\nsYs8oQGVWs3KdnVItrDYADUbAZBPfxTJySlXYuxOD4JIXmKMoULSe1BWuFSEDxFF\nYLNzM+uCJeqQkwZAr3xP0VXSEVhgKLI+O6Go6E6m2ME7LDLDOId+JuARDQ4D9PoI\n7xGAWr85LoO1J+LTOspZvHKyLv6T4E6dCEKR5118AQKBgQDmB39PT/0ObyhrSbH/\nxJVt6xVtOl6e1umzKGm+utAhFEAZK71Ncs68+QIEeCxLe2Jzz/UDfWcGmPpLHHXb\nBOHS0ZE8bpSDvY4ZN8FAXgMCkoU3inGzqkkU9w28RsLH6KcHru08LbiqVzSe3fBI\nsPlIxlAWtiqyDkMP3Y+AKVoOAQKBgQDQVfKKAqFLmsm71wi3QsCmVubs1lDJl+Wt\neGOEcPfFO3+KiACy9fvG8sdXjXDN8iOznZxYnv/z5pY9mZ2VeFa4wNFOUdtjc+3T\nO20h9k8KUJIXetT7kwJ7KsC5ltIgx+99ID/KiwGzQ1Swo//SM8nz4h+RV4hKGtZp\nLflKcHfXBwKBgQCO3E0m9uiVFFgn+ccAsBiWAZB3G+8z+wl9aTXzbJZiVO9SMqYI\n+aqIFqY4HGJ2JpUIlDj5B+L6Z/vatjxD4A5YHitzOsIl543e/4+X6Es6R8FQszzW\ndoWY7a6sJc5G1akWzn8sBsFPmYVmvTPEEZVgqzmGQXDW0KC5s8Kxt/zkAQKBgQCh\n4ebwblK+2KvglZpkLC5eEjCl33Iu8yS4wk8x3kXor+7Oyhcg+BqH4KYc1f7NSFWN\nf+64vfPMpWQgwXi9aCCattjsrpZ2lOI7vHV0alvIfArIy90rDnRjGDlg/FyStEjX\nRXPMAm9zx+HKz+Q8hZlrNE2rNgTk8C2i1OJcgT/diQKBgQDRglKWDhf7AvfIq8gC\n7a71djliF/aLlD1Q7rYoq4UQvLiMTQ4sOi7qd1WTfuE4W4mBhP7N10Y3vRhk1cEt\nawokbUDqbnh01elDD+yEBi/1pawbCoE3VbNDRniTjzyfMG++7qyD3TB1zk2+j+96\nix3olZhaJV4oXLfWbZAEFFCWIg==\n-----END PRIVATE KEY-----\n
+
+SERVER_PUBLIC_KEY (можно передать клиенту для проверки):
+-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuzNR3M8TwsNpYzmw5qgx\nD5HS7xlE+FsEtpedvWkbtEKdjJkqZFSdbsQ6pIV46/1Yyq004KqDkXbWo5E4Cm3V\nyeRTb6GQHbSEompz8kpQU4ty8u3EzaAXBfbW5ZtQ457cUxbEY1nZVVslVlyGfRj9\n40yehhJCcpmkIgO8b63aI3iW5reGrMZ+4K6MrLes2THCuWmVFLnPWjjxIgrZjnpG\nlwmKGaKuiHWhnEL1NIDhMyoI8oL0H93x4X6uxRw4Sb3O5K62ZSuAQricf9s4GeT8\nG8Am1RNuH7K/x/fyU7aRKJWdclmD6q/9M70K8cPD8movc7d3nNkQK5u0EjOCtbA5\nBwIDAQAB\n-----END PUBLIC KEY-----\n
+
+Добавьте в .env файл:
+SERVER_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQC7M1HczxPCw2lj\nObDmqDEPkdLvGUT4WwS2l529aRu0Qp2MmSpkVJ1uxDqkhXjr/VjKrTTgqoORdtaj\nkTgKbdXJ5FNvoZAdtISianPySlBTi3Ly7cTNoBcF9tblm1DjntxTFsRjWdlVWyVW\nXIZ9GP3jTJ6GEkJymaQiA7xvrdojeJbmt4asxn7groyst6zZMcK5aZUUuc9aOPEi\nCtmOekaXCYoZoq6IdaGcQvU0gOEzKgjygvQf3fHhfq7FHDhJvc7krrZlK4BCuJx/\n2zgZ5PwbwCbVE24fsr/H9/JTtpEolZ1yWYPqr/0zvQrxw8Pyai9zt3ec2RArm7QS\nM4K1sDkHAgMBAAECggEAVdaDbA+cDQuTsIcMocdvr6b7JN3ebU83Cw7cqrSemnqN\nSaIV+Sl/gwIBrdzyBKwH4e+oNniZmcL3SstU+htBE7FZvO9FaQmUY/ESN4Bx8s0X\nqWLzgiItTHPSODiOz8DRYFwpMzFI4cXIiiAlHwmtqWNBsVKAG5Jt25cA+eirBOYG\nsYs8oQGVWs3KdnVItrDYADUbAZBPfxTJySlXYuxOD4JIXmKMoULSe1BWuFSEDxFF\nYLNzM+uCJeqQkwZAr3xP0VXSEVhgKLI+O6Go6E6m2ME7LDLDOId+JuARDQ4D9PoI\n7xGAWr85LoO1J+LTOspZvHKyLv6T4E6dCEKR5118AQKBgQDmB39PT/0ObyhrSbH/\nxJVt6xVtOl6e1umzKGm+utAhFEAZK71Ncs68+QIEeCxLe2Jzz/UDfWcGmPpLHHXb\nBOHS0ZE8bpSDvY4ZN8FAXgMCkoU3inGzqkkU9w28RsLH6KcHru08LbiqVzSe3fBI\nsPlIxlAWtiqyDkMP3Y+AKVoOAQKBgQDQVfKKAqFLmsm71wi3QsCmVubs1lDJl+Wt\neGOEcPfFO3+KiACy9fvG8sdXjXDN8iOznZxYnv/z5pY9mZ2VeFa4wNFOUdtjc+3T\nO20h9k8KUJIXetT7kwJ7KsC5ltIgx+99ID/KiwGzQ1Swo//SM8nz4h+RV4hKGtZp\nLflKcHfXBwKBgQCO3E0m9uiVFFgn+ccAsBiWAZB3G+8z+wl9aTXzbJZiVO9SMqYI\n+aqIFqY4HGJ2JpUIlDj5B+L6Z/vatjxD4A5YHitzOsIl543e/4+X6Es6R8FQszzW\ndoWY7a6sJc5G1akWzn8sBsFPmYVmvTPEEZVgqzmGQXDW0KC5s8Kxt/zkAQKBgQCh\n4ebwblK+2KvglZpkLC5eEjCl33Iu8yS4wk8x3kXor+7Oyhcg+BqH4KYc1f7NSFWN\nf+64vfPMpWQgwXi9aCCattjsrpZ2lOI7vHV0alvIfArIy90rDnRjGDlg/FyStEjX\nRXPMAm9zx+HKz+Q8hZlrNE2rNgTk8C2i1OJcgT/diQKBgQDRglKWDhf7AvfIq8gC\n7a71djliF/aLlD1Q7rYoq4UQvLiMTQ4sOi7qd1WTfuE4W4mBhP7N10Y3vRhk1cEt\nawokbUDqbnh01elDD+yEBi/1pawbCoE3VbNDRniTjzyfMG++7qyD3TB1zk2+j+96\nix3olZhaJV4oXLfWbZAEFFCWIg==\n-----END PRIVATE KEY-----\n"
+SERVER_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuzNR3M8TwsNpYzmw5qgx\nD5HS7xlE+FsEtpedvWkbtEKdjJkqZFSdbsQ6pIV46/1Yyq004KqDkXbWo5E4Cm3V\nyeRTb6GQHbSEompz8kpQU4ty8u3EzaAXBfbW5ZtQ457cUxbEY1nZVVslVlyGfRj9\n40yehhJCcpmkIgO8b63aI3iW5reGrMZ+4K6MrLes2THCuWmVFLnPWjjxIgrZjnpG\nlwmKGaKuiHWhnEL1NIDhMyoI8oL0H93x4X6uxRw4Sb3O5K62ZSuAQricf9s4GeT8\nG8Am1RNuH7K/x/fyU7aRKJWdclmD6q/9M70K8cPD8movc7d3nNkQK5u0EjOCtbA5\nBwIDAQAB\n-----END PUBLIC KEY-----\n"
+
+
+📄 5. Полный .env файл (пример):
+======================================================================
+# Database
+DATABASE_URL=postgresql://user:password@host:5432/dbname
+
+# JWT
+JWT_SECRET=e9ce85b3d5427e0e1239fcfabe332275b531e1584e263f3ce9cb1709803f36fd3de80c18156fe12217403eb7d737c4d2eda592f1d6431cc05001b43cb8750493
+
+# Telegram
+BOT_TOKEN=your-telegram-bot-token
+
+# Encryption (AES-256)
+ENCRYPTION_KEY=c87fd1434d2f42702c606b475926834249ae4dcd41eccfbf672f27b31c252c13
+
+# Signature Keys (RSA)
+CLIENT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3RRPDsYcHrtK+cT5xyeE\nBTKE33+watGlCPvvcGoKzkXB76K6Kq977zEgQ4S1EtXCgGi87frMOcKbuuIQs/PC\nLd5B2Lm6B5PotxbHOSTAEnzq0+8EqGHjeYhg3uD7Z8BgRYdijKwuZIBuzhGoQdiZ\nsrykMalYXsWBpOCDQfpyPvc5JV9B4nMKhHnBghDDEXAj2kNFoqxgCbjYGDpFKEyW\nKV6ffiRIkAiaFloEMqVEKUTFpzlOyZPJcacrMFspPVRM12WZ1kl1ECLxgQHoX6hh\n8jnYMrEnkApx+BDxYl6FvEA77llMFl2y14iaBj9APviO8SkqUe1Y8jd88foPhMRu\nxwIDAQAB\n-----END PUBLIC KEY-----\n"
+SERVER_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQC7M1HczxPCw2lj\nObDmqDEPkdLvGUT4WwS2l529aRu0Qp2MmSpkVJ1uxDqkhXjr/VjKrTTgqoORdtaj\nkTgKbdXJ5FNvoZAdtISianPySlBTi3Ly7cTNoBcF9tblm1DjntxTFsRjWdlVWyVW\nXIZ9GP3jTJ6GEkJymaQiA7xvrdojeJbmt4asxn7groyst6zZMcK5aZUUuc9aOPEi\nCtmOekaXCYoZoq6IdaGcQvU0gOEzKgjygvQf3fHhfq7FHDhJvc7krrZlK4BCuJx/\n2zgZ5PwbwCbVE24fsr/H9/JTtpEolZ1yWYPqr/0zvQrxw8Pyai9zt3ec2RArm7QS\nM4K1sDkHAgMBAAECggEAVdaDbA+cDQuTsIcMocdvr6b7JN3ebU83Cw7cqrSemnqN\nSaIV+Sl/gwIBrdzyBKwH4e+oNniZmcL3SstU+htBE7FZvO9FaQmUY/ESN4Bx8s0X\nqWLzgiItTHPSODiOz8DRYFwpMzFI4cXIiiAlHwmtqWNBsVKAG5Jt25cA+eirBOYG\nsYs8oQGVWs3KdnVItrDYADUbAZBPfxTJySlXYuxOD4JIXmKMoULSe1BWuFSEDxFF\nYLNzM+uCJeqQkwZAr3xP0VXSEVhgKLI+O6Go6E6m2ME7LDLDOId+JuARDQ4D9PoI\n7xGAWr85LoO1J+LTOspZvHKyLv6T4E6dCEKR5118AQKBgQDmB39PT/0ObyhrSbH/\nxJVt6xVtOl6e1umzKGm+utAhFEAZK71Ncs68+QIEeCxLe2Jzz/UDfWcGmPpLHHXb\nBOHS0ZE8bpSDvY4ZN8FAXgMCkoU3inGzqkkU9w28RsLH6KcHru08LbiqVzSe3fBI\nsPlIxlAWtiqyDkMP3Y+AKVoOAQKBgQDQVfKKAqFLmsm71wi3QsCmVubs1lDJl+Wt\neGOEcPfFO3+KiACy9fvG8sdXjXDN8iOznZxYnv/z5pY9mZ2VeFa4wNFOUdtjc+3T\nO20h9k8KUJIXetT7kwJ7KsC5ltIgx+99ID/KiwGzQ1Swo//SM8nz4h+RV4hKGtZp\nLflKcHfXBwKBgQCO3E0m9uiVFFgn+ccAsBiWAZB3G+8z+wl9aTXzbJZiVO9SMqYI\n+aqIFqY4HGJ2JpUIlDj5B+L6Z/vatjxD4A5YHitzOsIl543e/4+X6Es6R8FQszzW\ndoWY7a6sJc5G1akWzn8sBsFPmYVmvTPEEZVgqzmGQXDW0KC5s8Kxt/zkAQKBgQCh\n4ebwblK+2KvglZpkLC5eEjCl33Iu8yS4wk8x3kXor+7Oyhcg+BqH4KYc1f7NSFWN\nf+64vfPMpWQgwXi9aCCattjsrpZ2lOI7vHV0alvIfArIy90rDnRjGDlg/FyStEjX\nRXPMAm9zx+HKz+Q8hZlrNE2rNgTk8C2i1OJcgT/diQKBgQDRglKWDhf7AvfIq8gC\n7a71djliF/aLlD1Q7rYoq4UQvLiMTQ4sOi7qd1WTfuE4W4mBhP7N10Y3vRhk1cEt\nawokbUDqbnh01elDD+yEBi/1pawbCoE3VbNDRniTjzyfMG++7qyD3TB1zk2+j+96\nix3olZhaJV4oXLfWbZAEFFCWIg==\n-----END PRIVATE KEY-----\n"
+SERVER_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuzNR3M8TwsNpYzmw5qgx\nD5HS7xlE+FsEtpedvWkbtEKdjJkqZFSdbsQ6pIV46/1Yyq004KqDkXbWo5E4Cm3V\nyeRTb6GQHbSEompz8kpQU4ty8u3EzaAXBfbW5ZtQ457cUxbEY1nZVVslVlyGfRj9\n40yehhJCcpmkIgO8b63aI3iW5reGrMZ+4K6MrLes2THCuWmVFLnPWjjxIgrZjnpG\nlwmKGaKuiHWhnEL1NIDhMyoI8oL0H93x4X6uxRw4Sb3O5K62ZSuAQricf9s4GeT8\nG8Am1RNuH7K/x/fyU7aRKJWdclmD6q/9M70K8cPD8movc7d3nNkQK5u0EjOCtbA5\nBwIDAQAB\n-----END PUBLIC KEY-----\n"
+
+# CORS
+FRONTEND_URL=https://your-domain.com
+
+# Server
+PORT=3001
+
+
+✅ Ключи успешно сгенерированы!
+⚠️  ВАЖНО: Храните приватные ключи в секрете!
+⚠️  Не коммитьте .env файл в Git!
+
+
+🧪 Тест AES-256 шифрования:
+----------------------------------------------------------------------
+Исходный адрес: STARSxxx1234567890abcdefg
+Зашифрованный: bf5be653ce24cda2722af4b470f83b6c:1d55d186648347e616ec386629037838:57d7b2e20fa5bd3a336839534d50c16c382ff5d49918df08ff
+Расшифрованный: STARSxxx1234567890abcdefg
+Тест ✅ PASSED
+
+🧪 Тест RSA подписей:
+----------------------------------------------------------------------
+Данные для подписи: {"userId":"12345","amount":100,"currency":"stars"}
+Подпись (base64): Ga6kRvIV198jUoro5rSBML9S6k/N/ZPtXVScyECF1dROoG7Ga3...
+Проверка подписи: ✅ VALID
+Проверка подделки: ✅ DETECTED
+
+✅ Все тесты пройдены!
+🚀 Готово к использованию!
+

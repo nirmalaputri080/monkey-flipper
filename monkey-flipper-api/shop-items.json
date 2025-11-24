@@ -1,0 +1,162 @@
+{
+  "skins": [
+    {
+      "id": "skin_golden_monkey",
+      "name": "Golden Monkey Skin",
+      "description": "Эксклюзивный золотой скин обезьяны",
+      "category": "skin",
+      "price": 50,
+      "currency": "stars",
+      "rarity": "legendary",
+      "image": "/assets/skins/golden_monkey.png"
+    },
+    {
+      "id": "skin_cyber_monkey",
+      "name": "Cyber Monkey Skin",
+      "description": "Футуристический киберпанк скин",
+      "category": "skin",
+      "price": 30,
+      "currency": "stars",
+      "rarity": "epic",
+      "image": "/assets/skins/cyber_monkey.png"
+    },
+    {
+      "id": "skin_ninja_monkey",
+      "name": "Ninja Monkey Skin",
+      "description": "Стелс скин ниндзя",
+      "category": "skin",
+      "price": 25,
+      "currency": "stars",
+      "rarity": "rare",
+      "image": "/assets/skins/ninja_monkey.png"
+    }
+  ],
+  "nft_characters": [
+    {
+      "id": "nft_astronaut_monkey",
+      "name": "Astronaut Monkey NFT",
+      "description": "Уникальный NFT персонаж - Обезьяна космонавт",
+      "category": "nft",
+      "price": 100,
+      "currency": "stars",
+      "rarity": "mythic",
+      "supply": 100,
+      "image": "/assets/nft/astronaut_monkey.png",
+      "attributes": {
+        "strength": 85,
+        "agility": 90,
+        "luck": 95
+      }
+    },
+    {
+      "id": "nft_pirate_monkey",
+      "name": "Pirate Monkey NFT",
+      "description": "Легендарный пиратский NFT персонаж",
+      "category": "nft",
+      "price": 75,
+      "currency": "stars",
+      "rarity": "legendary",
+      "supply": 200,
+      "image": "/assets/nft/pirate_monkey.png",
+      "attributes": {
+        "strength": 80,
+        "agility": 70,
+        "luck": 85
+      }
+    },
+    {
+      "id": "nft_wizard_monkey",
+      "name": "Wizard Monkey NFT",
+      "description": "Магический NFT персонаж с особыми силами",
+      "category": "nft",
+      "price": 120,
+      "currency": "stars",
+      "rarity": "mythic",
+      "supply": 50,
+      "image": "/assets/nft/wizard_monkey.png",
+      "attributes": {
+        "strength": 60,
+        "agility": 75,
+        "luck": 100
+      }
+    }
+  ],
+  "boosts": [
+    {
+      "id": "boost_super_jump",
+      "name": "Super Jump Boost",
+      "description": "Увеличивает высоту прыжка на 50% на 10 игр",
+      "category": "boost",
+      "price": 15,
+      "currency": "stars",
+      "duration": 10,
+      "effect": {
+        "type": "jump_height",
+        "multiplier": 1.5
+      },
+      "image": "/assets/boosts/super_jump.png"
+    },
+    {
+      "id": "boost_double_coins",
+      "name": "Double Coins Boost",
+      "description": "Удваивает получаемые монеты на 5 игр",
+      "category": "boost",
+      "price": 20,
+      "currency": "stars",
+      "duration": 5,
+      "effect": {
+        "type": "coin_multiplier",
+        "multiplier": 2
+      },
+      "image": "/assets/boosts/double_coins.png"
+    },
+    {
+      "id": "boost_shield",
+      "name": "Shield Boost",
+      "description": "Защита от одного падения на 3 игры",
+      "category": "boost",
+      "price": 10,
+      "currency": "stars",
+      "duration": 3,
+      "effect": {
+        "type": "shield",
+        "charges": 1
+      },
+      "image": "/assets/boosts/shield.png"
+    },
+    {
+      "id": "boost_mega_pack",
+      "name": "Mega Boost Pack",
+      "description": "Набор всех бустов на 15 игр",
+      "category": "boost",
+      "price": 50,
+      "currency": "stars",
+      "duration": 15,
+      "effect": {
+        "type": "combo",
+        "effects": ["jump_height", "coin_multiplier", "shield"]
+      },
+      "image": "/assets/boosts/mega_pack.png"
+    }
+  ],
+  "monkey_coin_items": [
+    {
+      "id": "basic_platform_skin",
+      "name": "Basic Platform Skin",
+      "description": "Простой скин для платформ",
+      "category": "cosmetic",
+      "price": 500,
+      "currency": "monkey",
+      "image": "/assets/cosmetics/platform_basic.png"
+    },
+    {
+      "id": "trail_effect",
+      "name": "Jump Trail Effect",
+      "description": "Эффект следа при прыжке",
+      "category": "cosmetic",
+      "price": 1000,
+      "currency": "monkey",
+      "image": "/assets/cosmetics/trail_effect.png"
+    }
+  ]
+}

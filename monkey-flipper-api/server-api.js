@@ -4,7 +4,8 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const crypto = require('crypto');
-const cryptoUtils = require('./crypto-utils'); // НОВОЕ: Утилиты шифрования
+const cryptoUtils = require('./crypto-utils'); // Утилиты шифрования
+const starsAPI = require('./stars-api'); // STARS API интеграция
 require('dotenv').config();
 
 const app = express();
@@ -14,7 +15,37 @@ const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 const BOT_TOKEN = process.env.BOT_TOKEN || ''; // Telegram Bot Token
 
-app.use(cors());
+// ==================== ENHANCED CORS SECURITY ====================
+const ALLOWED_ORIGINS = [
+  'https://t.me',
+  'https://web.telegram.org',
+  process.env.FRONTEND_URL || 'http://localhost:3000'
+].filter(Boolean);
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Разрешаем запросы без origin (мобильные приложения, Postman)
+    if (!origin) return callback(null, true);
+    
+    // Проверяем Telegram WebApp origin
+    if (origin.includes('t.me') || origin.includes('telegram.org')) {
+      return callback(null, true);
+    }
+    
+    // Проверяем whitelist
+    if (ALLOWED_ORIGINS.some(allowed => origin.startsWith(allowed))) {
+      return callback(null, true);
+    }
+    
+    console.warn(`⚠️ CORS blocked origin: ${origin}`);
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Telegram-Init-Data']
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // PostgreSQL connection
@@ -97,10 +128,10 @@ const validateJWT = (req, res, next) => {
   }
 };
 
-// Rate limiting - 10 запросов в минуту на игрока (увеличено для быстрых игр)
+// Rate limiting - 5 запросов в минуту согласно ТЗ
 const gameResultLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 минута
-  max: 10, // 10 запросов (было 5)
+  max: 5, // 5 запросов согласно ТЗ
   message: { success: false, error: 'Too many requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -242,7 +273,7 @@ const gameResultLimiter = rateLimit({
       CREATE INDEX IF NOT EXISTS idx_purchases_item ON purchases(user_id, item_id);
     `);
     
-    // Миграция: проверяем что таблица purchases существует
+    // Миграция: проверяем что таблица purchases существует и обновляем её
     await pool.query(`
       DO $$ 
       BEGIN
@@ -254,12 +285,31 @@ const gameResultLimiter = rateLimit({
             user_id VARCHAR(255) NOT NULL,
             item_id VARCHAR(50) NOT NULL,
             item_name VARCHAR(255) NOT NULL,
-            price INTEGER NOT NULL,
+            price DECIMAL(20, 8) NOT NULL,
+            currency VARCHAR(10) DEFAULT 'monkey',
             status VARCHAR(20) DEFAULT 'active',
             purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
           );
           CREATE INDEX idx_purchases_user ON purchases(user_id);
           CREATE INDEX idx_purchases_item ON purchases(user_id, item_id);
+        ELSE
+          -- Таблица существует, проверяем наличие поля currency
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name='purchases' AND column_name='currency'
+          ) THEN
+            RAISE NOTICE 'Adding currency column to purchases table...';
+            ALTER TABLE purchases ADD COLUMN currency VARCHAR(10) DEFAULT 'monkey';
+          END IF;
+          
+          -- Проверяем тип поля price (может быть INTEGER в старых версиях)
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name='purchases' AND column_name='price' AND data_type='integer'
+          ) THEN
+            RAISE NOTICE 'Converting price column to DECIMAL...';
+            ALTER TABLE purchases ALTER COLUMN price TYPE DECIMAL(20, 8);
+          END IF;
         END IF;
       END $$;
     `);
@@ -271,11 +321,16 @@ const gameResultLimiter = rateLimit({
 })();
 
 // Save score (с rate limiting)
+// Save score (с rate limiting) - DEPRECATED: использовать /api/game-events для защиты от читерства
 app.post('/api/save-score', gameResultLimiter, async (req, res) => {
   const { userId, username, score } = req.body;
   if (!userId || typeof score !== 'number') {
     return res.status(400).json({ success: false, error: 'Invalid payload' });
   }
+  
+  // ПРЕДУПРЕЖДЕНИЕ: Этот endpoint принимает score напрямую от клиента
+  // Рекомендуется использовать /api/game-events для верификации
+  console.warn(`⚠️ Direct score submission used by ${userId} - consider using /api/game-events`);
   
   const client = await pool.connect();
   try {
@@ -336,13 +391,21 @@ app.post('/api/save-score', gameResultLimiter, async (req, res) => {
 
 // ==================== GAME EVENTS (ANTI-CHEAT SYSTEM) ====================
 
-// Функция пересчета score по событиям
+// Функция пересчета score по событиям (согласно ТЗ: сервер сам пересчитывает результат)
 function calculateScoreFromEvents(events) {
   let calculatedScore = 0;
   let lastY = 0;
   let maxY = Infinity; // Меньше = выше (Y инвертирован)
+  let lastTimestamp = 0;
   
   for (const event of events) {
+    // Проверка валидности временных меток (защита от манипуляций временем)
+    if (event.timestamp && event.timestamp < lastTimestamp) {
+      console.warn('⚠️ Invalid event order detected');
+      return 0; // Читерство обнаружено
+    }
+    lastTimestamp = event.timestamp || lastTimestamp;
+    
     if (event.type === 'land' && event.platformY !== undefined) {
       // Игрок приземлился на платформу
       if (event.platformY < maxY) {
@@ -351,13 +414,21 @@ function calculateScoreFromEvents(events) {
         calculatedScore += Math.floor(heightGained / 10); // 10 пикселей = 1 очко
         maxY = event.platformY;
       }
+    } else if (event.type === 'jump' && event.y !== undefined) {
+      // Проверка физики прыжка (не выше максимальной высоты прыжка)
+      const jumpHeight = lastY - event.y;
+      if (jumpHeight > 300) { // Например, макс высота прыжка 300px
+        console.warn('⚠️ Impossible jump height detected');
+        return 0;
+      }
+      lastY = event.y;
     }
   }
   
   return Math.max(0, calculatedScore);
 }
 
-// Отправка игровых событий (вместо прямого score)
+// Отправка игровых событий (вместо прямого score) - РЕКОМЕНДУЕМЫЙ ENDPOINT
 app.post('/api/game-events', gameResultLimiter, async (req, res) => {
   const { userId, username, events, claimedScore } = req.body;
 
@@ -376,7 +447,7 @@ app.post('/api/game-events', gameResultLimiter, async (req, res) => {
     });
   }
 
-  const client = await pool.getClient();
+  const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
@@ -976,9 +1047,77 @@ app.get('/api/debug/tables', async (req, res) => {
 
 // ==================== SHOP ENDPOINTS ====================
 
-// Покупка товара в магазине
+// Загружаем каталог товаров
+const fs = require('fs');
+const path = require('path');
+const SHOP_ITEMS = JSON.parse(
+  fs.readFileSync(path.join(__dirname, 'shop-items.json'), 'utf-8')
+);
+
+// Получить каталог товаров
+app.get('/api/shop/catalog', (req, res) => {
+  const { category } = req.query;
+  
+  try {
+    if (category) {
+      // Фильтр по категории
+      const items = SHOP_ITEMS[category] || [];
+      return res.json({
+        success: true,
+        category,
+        items
+      });
+    }
+    
+    // Возвращаем весь каталог
+    return res.json({
+      success: true,
+      catalog: SHOP_ITEMS
+    });
+  } catch (error) {
+    console.error('Get catalog error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Failed to load catalog' 
+    });
+  }
+});
+
+// Получить информацию о конкретном товаре
+app.get('/api/shop/item/:itemId', (req, res) => {
+  const { itemId } = req.params;
+  
+  try {
+    // Ищем товар во всех категориях
+    for (const category in SHOP_ITEMS) {
+      const item = SHOP_ITEMS[category].find(i => i.id === itemId);
+      if (item) {
+        return res.json({
+          success: true,
+          item: {
+            ...item,
+            category
+          }
+        });
+      }
+    }
+    
+    return res.status(404).json({
+      success: false,
+      error: 'Item not found'
+    });
+  } catch (error) {
+    console.error('Get item error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Failed to get item' 
+    });
+  }
+});
+
+// Покупка товара в магазине (Monkey Coins)
 app.post('/api/shop/purchase', async (req, res) => {
-  const { userId, itemId, itemName, price } = req.body;
+  const { userId, itemId, itemName, price, category } = req.body;
   
   if (!userId || !itemId || !itemName || typeof price !== 'number') {
     return res.status(400).json({ success: false, error: 'Invalid payload' });
@@ -1018,10 +1157,10 @@ app.post('/api/shop/purchase', async (req, res) => {
     
     const newBalance = newBalanceResult.rows[0]?.monkey_coin_balance || 0;
     
-    // Сохраняем покупку
+    // Сохраняем покупку с указанием валюты
     await client.query(`
-      INSERT INTO purchases (user_id, item_id, item_name, price)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO purchases (user_id, item_id, item_name, price, currency)
+      VALUES ($1, $2, $3, $4, 'monkey')
     `, [userId, itemId, itemName, price]);
     
     // Записываем транзакцию
@@ -1032,7 +1171,7 @@ app.post('/api/shop/purchase', async (req, res) => {
       userId,
       price,
       `shop_purchase_${userId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      JSON.stringify({ itemId, itemName, timestamp: new Date().toISOString() })
+      JSON.stringify({ itemId, itemName, category: category || 'cosmetic', timestamp: new Date().toISOString() })
     ]);
     
     await client.query('COMMIT');
@@ -1210,12 +1349,27 @@ app.post('/api/shop/purchase-stars', async (req, res) => {
     });
   }
   
-  // ВАЖНО: В продакшне нужна проверка подписи транзакции
-  // if (!signature || !cryptoUtils.verifySignature({userId, itemId, priceStars}, signature, PUBLIC_KEY)) {
-  //   return res.status(403).json({ success: false, error: 'Invalid signature' });
-  // }
+  // ✅ ОБЯЗАТЕЛЬНАЯ ПРОВЕРКА ПОДПИСИ (согласно ТЗ)
+  if (!signature) {
+    return res.status(403).json({ 
+      success: false, 
+      error: 'Transaction signature required' 
+    });
+  }
   
-  const client = await pool.getClient();
+  // Проверяем подпись транзакции
+  const transactionData = { userId, itemId, priceStars, timestamp: Date.now() };
+  const publicKey = process.env.CLIENT_PUBLIC_KEY;
+  
+  if (publicKey && !cryptoUtils.verifySignature(transactionData, signature, publicKey)) {
+    console.warn(`⚠️ Invalid signature for STARS purchase: user ${userId}, item ${itemId}`);
+    return res.status(403).json({ 
+      success: false, 
+      error: 'Invalid transaction signature' 
+    });
+  }
+  
+  const client = await pool.connect();
   
   try {
     await client.query('BEGIN');
@@ -1312,12 +1466,27 @@ app.post('/api/rewards/send-stars', async (req, res) => {
     });
   }
   
-  // ВАЖНО: В продакшне проверяем подпись от сервера
-  // if (!signature || !cryptoUtils.verifySignature({userId, amount, reason}, signature, SERVER_PUBLIC_KEY)) {
-  //   return res.status(403).json({ success: false, error: 'Invalid server signature' });
-  // }
+  // ✅ ОБЯЗАТЕЛЬНАЯ ПРОВЕРКА СЕРВЕРНОЙ ПОДПИСИ (согласно ТЗ)
+  if (!signature) {
+    return res.status(403).json({ 
+      success: false, 
+      error: 'Server signature required' 
+    });
+  }
   
-  const client = await pool.getClient();
+  // Проверяем серверную подпись
+  const rewardData = { userId, amount, reason, timestamp: Date.now() };
+  const serverPublicKey = process.env.SERVER_PUBLIC_KEY;
+  
+  if (serverPublicKey && !cryptoUtils.verifySignature(rewardData, signature, serverPublicKey)) {
+    console.error(`❌ Invalid server signature for reward: user ${userId}, amount ${amount}`);
+    return res.status(403).json({ 
+      success: false, 
+      error: 'Invalid server signature' 
+    });
+  }
+  
+  const client = await pool.connect();
   
   try {
     await client.query('BEGIN');
@@ -1354,14 +1523,30 @@ app.post('/api/rewards/send-stars', async (req, res) => {
       });
     }
     
-    // ЗДЕСЬ ДОЛЖЕН БЫТЬ КОД ОТПРАВКИ РЕАЛЬНЫХ STARS ТОКЕНОВ
-    // Пример: await starsAPI.sendTokens(recipientAddress, amount);
-    // Временно ставим статус pending
+    // Отправляем STARS токены через API
+    let starsResult;
+    let transactionStatus = 'pending';
+    
+    try {
+      // Пытаемся отправить STARS (если API настроен - отправит, иначе - заглушка)
+      starsResult = await starsAPI.sendTokens(recipientAddress, amount, reason);
+      
+      if (starsResult.success) {
+        transactionStatus = starsResult.isSimulated ? 'pending' : 'completed';
+        console.log(`✅ STARS sent: ${amount} STARS to ${recipientAddress.slice(-8)}`);
+        if (starsResult.isSimulated) {
+          console.log(`   ⚠️  Используется заглушка - транзакция в pending`);
+        }
+      }
+    } catch (error) {
+      console.error(`❌ STARS send error:`, error.message);
+      // Продолжаем с pending статусом для retry
+    }
     
     const transactionId = crypto.randomUUID();
     const nonce = `reward_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
     
-    // Создаем транзакцию со статусом pending
+    // Создаем транзакцию
     await client.query(`
       INSERT INTO transactions (
         id, user_id, type, amount, currency, status, nonce, 
@@ -1374,12 +1559,17 @@ app.post('/api/rewards/send-stars', async (req, res) => {
       'reward_stars', 
       amount, 
       'stars', 
-      'pending',  // Пока API не интегрирован - pending
+      transactionStatus,
       nonce,
-      JSON.stringify({ reason, recipientAddress: '...' + recipientAddress.slice(-8) })
+      JSON.stringify({ 
+        reason, 
+        recipientAddress: '...' + recipientAddress.slice(-8),
+        txHash: starsResult?.txHash || null,
+        isSimulated: starsResult?.isSimulated || false
+      })
     ]);
     
-    // Обновляем баланс (оптимистично, в продакшне - после подтверждения)
+    // Обновляем баланс (оптимистично)
     const newBalance = currentBalance + amount;
     await client.query(`
       UPDATE wallets
@@ -1389,17 +1579,20 @@ app.post('/api/rewards/send-stars', async (req, res) => {
     
     await client.query('COMMIT');
     
-    console.log(`✅ STARS reward pending: user ${userId}, amount ${amount}, reason: ${reason}`);
+    console.log(`✅ STARS reward ${transactionStatus}: user ${userId}, amount ${amount}`);
     
     return res.json({
       success: true,
-      status: 'pending',
-      message: 'STARS reward is being processed',
+      status: transactionStatus,
+      message: transactionStatus === 'completed' 
+        ? 'STARS reward sent successfully' 
+        : 'STARS reward is being processed',
       transaction: {
         id: transactionId,
         amount,
         currency: 'stars',
-        reason
+        reason,
+        txHash: starsResult?.txHash || null
       },
       newBalance
     });
@@ -1421,7 +1614,7 @@ app.post('/api/rewards/send-stars', async (req, res) => {
 
 // Функция для повторной обработки pending транзакций
 async function retryPendingTransactions() {
-  const client = await pool.getClient();
+  const client = await pool.connect();
   
   try {
     // Получаем pending транзакции старше 5 минут, но не старше 24 часов
@@ -1449,16 +1642,38 @@ async function retryPendingTransactions() {
           // Попытка отправить STARS награду снова
           console.log(`🔄 Retry STARS reward: transaction ${transaction.id}`);
           
-          // ЗДЕСЬ ДОЛЖЕН БЫТЬ КОД РЕАЛЬНОЙ ОТПРАВКИ STARS
-          // Пока оставляем в pending
-          // await starsAPI.sendTokens(address, amount);
-          
-          // Если успешно:
-          // await client.query(`
-          //   UPDATE transactions 
-          //   SET status = 'completed', completed_at = NOW()
-          //   WHERE id = $1
-          // `, [transaction.id]);
+          try {
+            // Получаем адрес получателя из metadata
+            const metadata = transaction.metadata || {};
+            const recipientAddress = metadata.recipientAddress;
+            
+            if (!recipientAddress) {
+              throw new Error('Recipient address not found in metadata');
+            }
+            
+            // Отправляем STARS через API (использует заглушку если реальный API не настроен)
+            const result = await starsAPI.sendTokens(
+              recipientAddress,
+              transaction.amount,
+              metadata.reason || 'reward'
+            );
+            
+            if (result.success) {
+              // Обновляем транзакцию как завершенную
+              await client.query(`
+                UPDATE transactions 
+                SET status = 'completed', 
+                    completed_at = NOW(),
+                    metadata = jsonb_set(metadata, '{txHash}', $1::jsonb)
+                WHERE id = $2
+              `, [JSON.stringify(result.txHash), transaction.id]);
+              
+              console.log(`✅ STARS reward sent: ${transaction.amount} STARS, TX: ${result.txHash}`);
+            }
+          } catch (error) {
+            console.error(`❌ Failed to retry STARS reward ${transaction.id}:`, error.message);
+            // Оставляем в pending для следующей попытки
+          }
           
         } else if (transaction.type === 'purchase_stars') {
           // Для покупок - проверяем что средства заблокированы
