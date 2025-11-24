@@ -3,12 +3,19 @@
  * Документация: https://core.telegram.org/bots/payments-stars
  */
 
+require('dotenv').config(); // Загружаем переменные окружения
 const TelegramBot = require('node-telegram-bot-api');
 
 // Инициализация бота с токеном
 // polling будет включен только если установлен BOT_TOKEN и ENABLE_BOT_POLLING=true
 const botToken = process.env.BOT_TOKEN || '';
-const enablePolling = process.env.ENABLE_BOT_POLLING === 'true' && botToken;
+const enablePolling = process.env.ENABLE_BOT_POLLING === 'true' && !!botToken;
+
+console.log('🔍 Telegram Bot Config:', {
+  hasToken: !!botToken,
+  tokenPreview: botToken ? `${botToken.substring(0, 10)}...` : 'none',
+  enablePolling
+});
 
 const bot = botToken 
   ? new TelegramBot(botToken, { polling: enablePolling })
