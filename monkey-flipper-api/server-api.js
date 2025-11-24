@@ -2015,6 +2015,64 @@ if (BOT_TOKEN && process.env.ENABLE_BOT_POLLING === 'true' && telegramStars.bot)
   console.log('ℹ️ Telegram Bot polling отключен (установите ENABLE_BOT_POLLING=true для включения)');
 }
 
+// ==================== SHOP API ENDPOINTS ====================
+
+/**
+ * Получить баланс пользователя (без JWT для упрощения)
+ */
+app.get('/api/wallet/balance', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    
+    if (!userId) {
+      return res.status(400).json({ success: false, error: 'userId required' });
+    }
+    
+    // Получаем баланс из БД
+    const result = await pool.query(
+      'SELECT monkey_coin_balance, stars_balance FROM wallets WHERE user_id = $1',
+      [userId]
+    );
+    
+    if (result.rows.length === 0) {
+      // Создаем кошелек если нет
+      await pool.query(
+        'INSERT INTO wallets (user_id, monkey_coin_balance, stars_balance) VALUES ($1, 0, 0)',
+        [userId]
+      );
+      
+      return res.json({
+        success: true,
+        monkeyCoins: 0,
+        stars: 0
+      });
+    }
+    
+    res.json({
+      success: true,
+      monkeyCoins: result.rows[0].monkey_coin_balance || 0,
+      stars: result.rows[0].stars_balance || 0
+    });
+    
+  } catch (error) {
+    console.error('❌ Ошибка получения баланса:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Получить список товаров магазина
+ */
+app.get('/api/shop/items', async (req, res) => {
+  try {
+    const shopItems = JSON.parse(fs.readFileSync('./shop-items.json', 'utf8'));
+    res.json({ success: true, items: shopItems });
+  } catch (error) {
+    console.error('❌ Ошибка загрузки товаров:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`API server listening on ${PORT}`);
   console.log(`💰 Игровые STARS: Включены (виртуальная валюта)`);
