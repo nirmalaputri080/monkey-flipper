@@ -2,9 +2,21 @@ services:
   - type: web
     name: monkey-flipper-1v1-server
     env: node
-    buildCommand: npm install
-    startCommand: node server.js
+    buildCommand: cd monkey-flipper-api && npm install
+    startCommand: cd monkey-flipper-api && node server-api.js
     plan: free
     envVars:
       - key: NODE_ENV
         value: production
+      - key: BOT_TOKEN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: GAME_URL
+        value: https://monkey-flipper-test-key-1.vercel.app
+      - key: ENABLE_BOT_POLLING
+        value: true

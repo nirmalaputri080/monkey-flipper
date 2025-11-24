@@ -145,6 +145,19 @@ const gameResultLimiter = rateLimit({
 // Create table if not exists
 (async () => {
   try {
+    // Таблица для пользователей
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        telegram_id VARCHAR(255) PRIMARY KEY,
+        username VARCHAR(255),
+        intro_seen BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_login TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id);
+      CREATE INDEX IF NOT EXISTS idx_users_intro_seen ON users(intro_seen);
+    `);
+    
     // Таблица для обычных счетов
     await pool.query(`
       CREATE TABLE IF NOT EXISTS player_scores (
@@ -1743,7 +1756,7 @@ app.post('/api/admin/retry-pending', async (req, res) => {
 /**
  * Создать инвойс для покупки за Telegram Stars (XTR)
  */
-app.post('/api/shop/create-stars-invoice', authenticateJWT, async (req, res) => {
+app.post('/api/shop/create-stars-invoice', validateJWT, async (req, res) => {
   try {
     const { userId, itemId } = req.body;
     
@@ -1806,7 +1819,7 @@ app.post('/api/shop/create-stars-invoice', authenticateJWT, async (req, res) => 
 /**
  * Проверка баланса Telegram Stars бота
  */
-app.get('/api/stars/balance', authenticateJWT, async (req, res) => {
+app.get('/api/stars/balance', validateJWT, async (req, res) => {
   try {
     const balance = await telegramStars.getStarsBalance();
     
@@ -1830,9 +1843,181 @@ telegramStars.setupPaymentHandler(app);
 
 console.log('✅ Telegram Stars (XTR) обработчики подключены');
 
+// ==================== ВСТУПИТЕЛЬНОЕ ВИДЕО ====================
+
+/**
+ * Endpoint для отправки вступительного видео
+ * POST /api/send-intro-video
+ * Body: { userId, videoType: 'mp4' | 'gif' }
+ */
+app.post('/api/send-intro-video', async (req, res) => {
+  try {
+    const { userId, videoType = 'mp4' } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'userId is required' 
+      });
+    }
+    
+    const gameUrl = process.env.GAME_URL || 'https://your-game-url.com';
+    
+    // Путь к видео (положите свое видео в папку assets/)
+    const videoPath = videoType === 'gif' 
+      ? './assets/intro.gif' 
+      : './assets/intro.mp4';
+    
+    // Отправляем видео через Telegram
+    if (videoType === 'gif') {
+      await telegramStars.showIntroAnimation(userId, videoPath, gameUrl);
+    } else {
+      await telegramStars.showIntroVideo(userId, videoPath, gameUrl);
+    }
+    
+    // Отмечаем в БД, что пользователь видел intro
+    await pool.query(`
+      INSERT INTO users (telegram_id, intro_seen, created_at)
+      VALUES ($1, true, NOW())
+      ON CONFLICT (telegram_id) 
+      DO UPDATE SET intro_seen = true
+    `, [userId]);
+    
+    res.json({ 
+      success: true, 
+      message: 'Intro video sent successfully' 
+    });
+    
+  } catch (error) {
+    console.error('❌ Ошибка отправки intro video:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+/**
+ * Проверка, видел ли пользователь intro
+ * GET /api/check-intro/:userId
+ */
+app.get('/api/check-intro/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const result = await pool.query(
+      'SELECT intro_seen FROM users WHERE telegram_id = $1',
+      [userId]
+    );
+    
+    const introSeen = result.rows.length > 0 && result.rows[0].intro_seen;
+    
+    res.json({ 
+      success: true, 
+      introSeen 
+    });
+    
+  } catch (error) {
+    console.error('❌ Ошибка проверки intro:', error);
+    res.json({ 
+      success: true, 
+      introSeen: false  // По умолчанию не видел
+    });
+  }
+});
+
+// ==================== TELEGRAM BOT COMMANDS ====================
+
+// Запуск Telegram бота (если BOT_TOKEN установлен)
+if (BOT_TOKEN && process.env.ENABLE_BOT_POLLING === 'true' && telegramStars.bot) {
+  const bot = telegramStars.bot;
+  
+  // Команда /start - показать intro video
+  bot.onText(/\/start/, async (msg) => {
+    const userId = msg.from.id;
+    const username = msg.from.username || msg.from.first_name;
+    
+    console.log(`🎮 Новый пользователь: ${username} (${userId})`);
+    
+    try {
+      // Проверяем, видел ли пользователь intro
+      const result = await pool.query(
+        'SELECT intro_seen FROM users WHERE telegram_id = $1',
+        [userId]
+      );
+      
+      const gameUrl = process.env.GAME_URL || 'https://your-game-url.com';
+      
+      if (result.rows.length === 0 || !result.rows[0].intro_seen) {
+        // Первый раз - показываем intro video
+        console.log(`📹 Отправка intro video пользователю ${userId}`);
+        await telegramStars.showIntroVideo(userId, './assets/intro.mp4', gameUrl);
+        
+        // Отмечаем в БД
+        await pool.query(`
+          INSERT INTO users (telegram_id, username, intro_seen, created_at)
+          VALUES ($1, $2, true, NOW())
+          ON CONFLICT (telegram_id) 
+          DO UPDATE SET intro_seen = true, username = $2
+        `, [userId, username]);
+        
+      } else {
+        // Уже видел - просто кнопка игры
+        await bot.sendMessage(userId, 
+          `🎮 С возвращением, ${username}!\n\n` +
+          `Готов снова играть?`,
+          {
+            reply_markup: {
+              inline_keyboard: [[
+                { text: '🎮 Начать игру', web_app: { url: gameUrl } }
+              ]]
+            }
+          }
+        );
+      }
+      
+    } catch (error) {
+      console.error('❌ Ошибка обработки /start:', error);
+      
+      // Fallback - просто кнопка
+      await bot.sendMessage(userId, 
+        '🎮 Добро пожаловать в Monkey Flipper!',
+        {
+          reply_markup: {
+            inline_keyboard: [[
+              { text: '🎮 Начать игру', web_app: { url: process.env.GAME_URL } }
+            ]]
+          }
+        }
+      );
+    }
+  });
+  
+  // Команда /video - пересмотреть intro
+  bot.onText(/\/video/, async (msg) => {
+    const userId = msg.from.id;
+    const gameUrl = process.env.GAME_URL || 'https://your-game-url.com';
+    
+    try {
+      await telegramStars.showIntroVideo(userId, './assets/intro.mp4', gameUrl);
+    } catch (error) {
+      console.error('❌ Ошибка /video:', error);
+      await bot.sendMessage(userId, '⚠️ Ошибка отправки видео');
+    }
+  });
+  
+  // Polling уже запущен в telegram-stars-real.js
+  console.log('🤖 Telegram Bot запущен в режиме polling');
+  console.log('📹 Вступительное видео: Включено');
+  
+} else {
+  console.log('ℹ️ Telegram Bot polling отключен (установите ENABLE_BOT_POLLING=true для включения)');
+}
+
 app.listen(PORT, () => {
   console.log(`API server listening on ${PORT}`);
   console.log(`💰 Игровые STARS: Включены (виртуальная валюта)`);
   console.log(`⭐ Telegram Stars (XTR): Включены (реальные платежи)`);
+  console.log(`📹 Intro Video API: /api/send-intro-video`);
 });
 

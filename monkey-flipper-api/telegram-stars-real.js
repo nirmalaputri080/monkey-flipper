@@ -6,7 +6,13 @@
 const TelegramBot = require('node-telegram-bot-api');
 
 // Инициализация бота с токеном
-const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: false });
+// polling будет включен только если установлен BOT_TOKEN и ENABLE_BOT_POLLING=true
+const botToken = process.env.BOT_TOKEN || '';
+const enablePolling = process.env.ENABLE_BOT_POLLING === 'true' && botToken;
+
+const bot = botToken 
+  ? new TelegramBot(botToken, { polling: enablePolling })
+  : null;
 
 /**
  * Создать инвойс для оплаты Telegram Stars
@@ -17,6 +23,10 @@ const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: false });
  * @returns {Promise<string>} - Invoice URL
  */
 async function createStarsInvoice(userId, itemName, itemDescription, starsAmount) {
+    if (!bot) {
+        throw new Error('Telegram Bot не инициализирован');
+    }
+    
     try {
         // Создаем инвойс для оплаты Stars
         const invoice = await bot.sendInvoice(
@@ -49,6 +59,11 @@ async function createStarsInvoice(userId, itemName, itemDescription, starsAmount
  * Обработчик успешного платежа (webhook)
  */
 function setupPaymentHandler(server) {
+    if (!bot) {
+        console.warn('⚠️ Telegram Bot не инициализирован (BOT_TOKEN не установлен)');
+        return;
+    }
+    
     // Обработка pre_checkout_query (перед оплатой)
     bot.on('pre_checkout_query', async (query) => {
         console.log('💰 Pre-checkout:', query);
@@ -151,11 +166,104 @@ async function withdrawStars(recipientUserId, amount) {
     }
 }
 
+/**
+ * Показать вступительное видео перед запуском игры
+ * @param {number} userId - Telegram User ID
+ * @param {string} videoPath - Путь к видео файлу или URL
+ * @param {string} gameUrl - URL игры для кнопки
+ */
+async function showIntroVideo(userId, videoPath, gameUrl) {
+    if (!bot) {
+        throw new Error('Telegram Bot не инициализирован');
+    }
+    
+    try {
+        // Отправляем видео с кнопкой запуска игры
+        await bot.sendVideo(userId, videoPath, {
+            caption: '🎮 Добро пожаловать в Monkey Flipper!\n\n' +
+                     '🐵 Переворачивай карты и зарабатывай монеты\n' +
+                     '⚔️ Сражайся с другими игроками\n' +
+                     '🏆 Поднимайся в рейтинге\n\n' +
+                     '👇 Нажми кнопку, чтобы начать играть!',
+            reply_markup: {
+                inline_keyboard: [[
+                    { 
+                        text: '🎮 Начать игру', 
+                        web_app: { url: gameUrl } 
+                    }
+                ]]
+            },
+            supports_streaming: true  // Для плавного воспроизведения
+        });
+        
+        console.log(`✅ Вступительное видео отправлено пользователю ${userId}`);
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Ошибка отправки видео:', error);
+        
+        // Fallback: отправить просто кнопку без видео
+        await bot.sendMessage(userId, 
+            '🎮 Добро пожаловать в Monkey Flipper!\n\n' +
+            '🐵 Переворачивай карты и зарабатывай монеты\n' +
+            '⚔️ Сражайся с другими игроками\n' +
+            '🏆 Поднимайся в рейтинге',
+            {
+                reply_markup: {
+                    inline_keyboard: [[
+                        { 
+                            text: '🎮 Начать игру', 
+                            web_app: { url: gameUrl } 
+                        }
+                    ]]
+                }
+            }
+        );
+        
+        return false;
+    }
+}
+
+/**
+ * Показать видео с анимацией (GIF)
+ * @param {number} userId - Telegram User ID
+ * @param {string} animationPath - Путь к GIF файлу
+ * @param {string} gameUrl - URL игры
+ */
+async function showIntroAnimation(userId, animationPath, gameUrl) {
+    if (!bot) {
+        throw new Error('Telegram Bot не инициализирован');
+    }
+    
+    try {
+        await bot.sendAnimation(userId, animationPath, {
+            caption: '🎮 Готов играть? Нажми кнопку!',
+            reply_markup: {
+                inline_keyboard: [[
+                    { 
+                        text: '🎮 Начать игру', 
+                        web_app: { url: gameUrl } 
+                    }
+                ]]
+            }
+        });
+        
+        console.log(`✅ Анимация отправлена пользователю ${userId}`);
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Ошибка отправки анимации:', error);
+        return false;
+    }
+}
+
 module.exports = {
     createStarsInvoice,
     setupPaymentHandler,
     addItemToInventory,
     getStarsBalance,
     withdrawStars,
+    showIntroVideo,
+    showIntroAnimation,
     bot
 };
