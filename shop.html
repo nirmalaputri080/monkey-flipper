@@ -373,17 +373,21 @@
         // Загрузка баланса
         async function loadBalance() {
             try {
-                const response = await fetch(`${API_URL}/api/wallet/balance?userId=${userId}`, {
+                // Используем существующий endpoint /api/wallet/:userId
+                const response = await fetch(`${API_URL}/api/wallet/${userId}`, {
                     headers: { 'Authorization': `Bearer ${jwt}` }
                 });
 
                 const data = await response.json();
-                if (data.success) {
-                    document.getElementById('coinsBalance').textContent = data.balance.coins.toLocaleString();
-                    document.getElementById('starsBalance').textContent = data.balance.stars.toLocaleString();
+                if (data.success && data.wallet) {
+                    document.getElementById('coinsBalance').textContent = (data.wallet.monkeyCoin || 0).toLocaleString();
+                    document.getElementById('starsBalance').textContent = (parseFloat(data.wallet.stars) || 0).toLocaleString();
                 }
             } catch (error) {
                 console.error('❌ Ошибка загрузки баланса:', error);
+                // Устанавливаем 0 при ошибке
+                document.getElementById('coinsBalance').textContent = '0';
+                document.getElementById('starsBalance').textContent = '0';
             }
         }
 
