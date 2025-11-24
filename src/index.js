@@ -306,7 +306,12 @@ class MenuScene extends Phaser.Scene {
             btnGraphics.fillStyle(0xFFFFFF, 1);
             btnGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 90, btnData.y - 24, 180, 48, 8);
 
-            const btnText = this.add.text(CONSTS.WIDTH / 2, btnData.y, btnData.text, { fontSize: '24px', fill: '#000', fontFamily: 'Arial Black' }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(2);
+            // Прозрачная интерактивная зона поверх всей кнопки
+            const btnZone = this.add.rectangle(CONSTS.WIDTH / 2, btnData.y, 180, 48, 0x000000, 0)
+                .setInteractive({ useHandCursor: true })
+                .setDepth(3);
+
+            const btnText = this.add.text(CONSTS.WIDTH / 2, btnData.y, btnData.text, { fontSize: '24px', fill: '#000', fontFamily: 'Arial Black' }).setOrigin(0.5).setDepth(4);
 
             const setButtonColor = (hover) => {
                 btnGraphics.clear();
@@ -314,12 +319,12 @@ class MenuScene extends Phaser.Scene {
                 btnGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 90, btnData.y - 24, 180, 48, 8);
             };
 
-            btnText.on('pointerover', () => setButtonColor(true));
-            btnText.on('pointerout', () => setButtonColor(false));
-            btnText.on('pointerdown', btnData.callback);
+            btnZone.on('pointerover', () => setButtonColor(true));
+            btnZone.on('pointerout', () => setButtonColor(false));
+            btnZone.on('pointerdown', btnData.callback);
 
             // Анимация появления
-            [btnGraphics, btnText].forEach(obj => {
+            [btnGraphics, btnZone, btnText].forEach(obj => {
                 obj.setAlpha(0);
                 this.tweens.add({
                     targets: obj,
@@ -739,8 +744,16 @@ class ShopScene extends Phaser.Scene {
     
     createShopItems() {
         const items = [
+            // 💰 ТЕСТОВЫЕ ПАКЕТЫ МОНЕТ (для тестирования)
+            { name: '💰 100 Coins', price: 0, id: 'test_coins_100', description: '🎁 FREE TEST PACK', isFree: true },
+            { name: '💰 500 Coins', price: 0, id: 'test_coins_500', description: '🎁 FREE TEST PACK', isFree: true },
+            { name: '💎 1000 Coins', price: 0, id: 'test_coins_1000', description: '🎁 FREE TEST PACK', isFree: true },
+            
+            // 🎨 Скины
             { name: '🎨 Golden Skin', price: 100, id: 'skin_golden', description: 'Shine like gold!' },
             { name: '🔥 Fire Skin', price: 150, id: 'skin_fire', description: 'Burn the platforms!' },
+            
+            // ⚡ Бусты
             { name: '⚡ Speed Boost', price: 50, id: 'boost_speed', description: '+20% speed for 1 game' },
             { name: '🛡️ Shield', price: 75, id: 'boost_shield', description: 'Protect from 1 death' },
             { name: '💎 2x Coins', price: 200, id: 'boost_2x', description: 'Double coins for 5 games' },
@@ -775,8 +788,8 @@ class ShopScene extends Phaser.Scene {
             });
             
             // Кнопка покупки - компактнее
-            const canAfford = this.monkeyCoins >= item.price;
-            const buttonColor = canAfford ? 0x4CAF50 : 0x666666;
+            const canAfford = this.monkeyCoins >= item.price || item.isFree;
+            const buttonColor = item.isFree ? 0xFFD700 : (canAfford ? 0x4CAF50 : 0x666666);
             
             const buyButton = this.add.graphics();
             buyButton.fillStyle(buttonColor, 1);
@@ -786,7 +799,7 @@ class ShopScene extends Phaser.Scene {
                 .setInteractive({ useHandCursor: canAfford });
             
             const buyText = this.add.text(CONSTS.WIDTH - 55, y, 
-                canAfford ? `${item.price}💰` : `${item.price}💰`, {
+                item.isFree ? 'GET' : (canAfford ? `${item.price}💰` : `${item.price}💰`), {
                 fontSize: '14px',
                 fill: canAfford ? '#FFF' : '#999',
                 fontFamily: 'Arial Black'
@@ -813,7 +826,45 @@ class ShopScene extends Phaser.Scene {
         console.log(`💳 Attempting to buy: ${item.name} for ${item.price} coins`);
         
         try {
-            // Отправляем запрос на покупку
+            // Специальная обработка для тестовых бесплатных пакетов монет
+            if (item.isFree && item.id.startsWith('test_coins_')) {
+                const coinsAmount = parseInt(item.id.replace('test_coins_', ''));
+                
+                const response = await fetch(`${API_SERVER_URL}/api/wallet/add-coins`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: this.userData.id,
+                        amount: coinsAmount
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.monkeyCoins = data.newBalance;
+                    this.coinsText.setText(`💰 ${this.monkeyCoins} Monkey Coins`);
+                    
+                    const notification = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2, 
+                        `✅ Received ${coinsAmount} Coins!\nNew balance: ${data.newBalance} 💰`, {
+                        fontSize: '20px',
+                        fill: '#00FF00',
+                        fontFamily: 'Arial Black',
+                        align: 'center',
+                        backgroundColor: '#000000',
+                        padding: { x: 20, y: 15 }
+                    }).setOrigin(0.5).setDepth(100);
+                    
+                    this.time.delayedCall(2000, () => {
+                        notification.destroy();
+                        this.scene.restart();
+                    });
+                }
+                
+                return;
+            }
+            
+            // Обычная покупка товара
             const response = await fetch(`${API_SERVER_URL}/api/shop/purchase`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -952,15 +1003,20 @@ class MatchmakingScene extends Phaser.Scene {
         });
         
         // Кнопка отмены
-        const cancelButton = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT - 100, 'Cancel', {
+        const cancelGraphics = this.add.graphics();
+        cancelGraphics.fillStyle(0xFF0000, 1);
+        cancelGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 80, CONSTS.HEIGHT - 120, 160, 50, 8);
+        
+        const cancelZone = this.add.rectangle(CONSTS.WIDTH / 2, CONSTS.HEIGHT - 95, 160, 50, 0x000000, 0)
+            .setInteractive({ useHandCursor: true });
+        
+        const cancelButton = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT - 95, 'Cancel', {
             fontSize: '28px',
             fill: '#FFFFFF',
-            fontFamily: 'Arial',
-            backgroundColor: '#FF0000',
-            padding: { x: 20, y: 10 }
-        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+            fontFamily: 'Arial'
+        }).setOrigin(0.5);
         
-        cancelButton.on('pointerdown', () => {
+        cancelZone.on('pointerdown', () => {
             this.cancelMatchmaking();
         });
         
@@ -2599,15 +2655,22 @@ class GameScene extends Phaser.Scene {
         }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
         
         // Кнопка возврата в меню
-        const menuButton = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT - 100, 'Return to Menu', {
+        const menuGraphics = this.add.graphics().setScrollFactor(0).setDepth(200);
+        menuGraphics.fillStyle(0x0066CC, 1);
+        menuGraphics.fillRoundedRect(CONSTS.WIDTH / 2 - 120, CONSTS.HEIGHT - 120, 240, 55, 8);
+        
+        const menuZone = this.add.rectangle(CONSTS.WIDTH / 2, CONSTS.HEIGHT - 92.5, 240, 55, 0x000000, 0)
+            .setScrollFactor(0)
+            .setDepth(202)
+            .setInteractive({ useHandCursor: true });
+        
+        const menuButton = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT - 92.5, 'Return to Menu', {
             fontSize: '32px',
             fill: '#FFFFFF',
-            fontFamily: 'Arial',
-            backgroundColor: '#0066CC',
-            padding: { x: 20, y: 10 }
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(201).setInteractive({ useHandCursor: true });
+            fontFamily: 'Arial'
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(203);
         
-        menuButton.on('pointerdown', () => {
+        menuZone.on('pointerdown', () => {
             this.cleanup();
             this.scene.start('MenuScene');
         });
