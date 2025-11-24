@@ -359,6 +359,7 @@ class MenuScene extends Phaser.Scene {
     // НОВОЕ: Открыть веб-магазин (shop.html с Telegram Stars)
     openWebShop() {
         console.log('⭐ Opening web shop...');
+        const userData = getTelegramUserId();
         const userId = userData?.id || 'unknown';
         const shopUrl = `${window.location.origin}/shop.html?userId=${userId}`;
         
