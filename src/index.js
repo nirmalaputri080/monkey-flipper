@@ -1942,6 +1942,8 @@ class GameScene extends Phaser.Scene {
     this.player = null;
     this.playerSkin = null; // НОВОЕ: Активный скин игрока
     this.equippedItems = {}; // НОВОЕ: Все экипированные предметы
+    this.jumpMultiplier = 1.0; // НОВОЕ: Множитель для прыжка (1.0 = нормально, 1.5 = +50%)
+    this.hasShield = false; // НОВОЕ: Есть ли активный щит от падения
     this.isFalling = false;
     this.isJumping = false; // НОВОЕ: Флаг для состояния прыжка
     this.lastBouncePlatform = null; // ФИКС: Запоминаем последнюю платформу с которой прыгнули
@@ -2031,6 +2033,10 @@ class GameScene extends Phaser.Scene {
         this.loadEquippedItems(userData.id).then(() => {
             // После загрузки экипировки показываем бусты
             console.log('✅ Экипировка загружена, показываем бусты');
+            
+            // Применяем игровые эффекты бустов
+            this.applyBoostEffects();
+            
             this.showActiveBoosts();
         });
         
@@ -2917,7 +2923,7 @@ class GameScene extends Phaser.Scene {
             if (standingPlatform.platformType === 'unbreakable') {
                 console.log('🔵 Прыжок с нелопающегося шарика!');
                 this.player.body.setAllowGravity(true);
-                this.player.setVelocityY(CONSTS.JUMP_VELOCITY);
+                this.player.setVelocityY(CONSTS.JUMP_VELOCITY * this.jumpMultiplier);
                 this.player.anims.stop();
                 this.player.setTexture('monkey_up'); // ФИКС: Статичная текстура вместо анимации
                 return;
@@ -2937,7 +2943,7 @@ class GameScene extends Phaser.Scene {
             }
             
             this.player.body.setAllowGravity(true);
-            this.player.setVelocityY(CONSTS.JUMP_VELOCITY);
+            this.player.setVelocityY(CONSTS.JUMP_VELOCITY * this.jumpMultiplier); // С учётом буста
             this.player.anims.stop();
             this.player.setTexture('monkey_up'); // ФИКС: Статичная текстура вместо анимации
         }
@@ -3036,7 +3042,7 @@ class GameScene extends Phaser.Scene {
         // НОВОЕ: Обработка нелопающихся шариков
         if (platformObj.platformType === 'unbreakable') {
     console.log('🔵 Прыжок с нелопающегося шарика!');
-    player.setVelocityY(CONSTS.JUMP_VELOCITY);
+    player.setVelocityY(CONSTS.JUMP_VELOCITY * this.jumpMultiplier); // С учётом буста
     this.player.anims.stop();
     this.player.setTexture('monkey_up');
     
@@ -3079,7 +3085,7 @@ class GameScene extends Phaser.Scene {
             platformObj.smashStartTime = this.time.now;
         }
         
-        player.setVelocityY(CONSTS.JUMP_VELOCITY); // Немедленный прыжок вверх
+        player.setVelocityY(CONSTS.JUMP_VELOCITY * this.jumpMultiplier); // Немедленный прыжок вверх (с бустом)
         this.player.anims.stop();
         this.player.setTexture('monkey_up'); // ФИКС: Статичная текстура вместо анимации
         this.isJumping = true; // НОВОЕ: Устанавливаем флаг прыжка
@@ -3110,6 +3116,31 @@ class GameScene extends Phaser.Scene {
     // НОВОЕ: Метод для обработки game over при падении на землю
     handleGameOverOnGround() {
         console.log('💥 Обезьяна упала на землю!');
+        
+        // НОВОЕ: Проверка щита
+        if (this.hasShield) {
+            console.log('🛡️ Щит активирован! Спасён от падения!');
+            this.hasShield = false; // Расходуем щит
+            
+            // Визуальный эффект щита
+            const shieldText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2, '🛡️ SHIELD!', {
+                fontSize: '48px',
+                fill: '#00FFFF',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 6
+            }).setOrigin(0.5).setDepth(1000).setScrollFactor(0);
+            
+            // Подбрасываем игрока вверх
+            this.player.setVelocityY(CONSTS.JUMP_VELOCITY * 1.2);
+            
+            // Убираем текст через 1 секунду
+            this.time.delayedCall(1000, () => {
+                shieldText.destroy();
+            });
+            
+            return; // НЕ заканчиваем игру!
+        }
         
         // Останавливаем физику
         this.physics.pause();
@@ -4421,6 +4452,36 @@ class GameScene extends Phaser.Scene {
         }
     }
 
+    // Применяет игровые эффекты от бустов (высота прыжка, щит и т.д.)
+    applyBoostEffects() {
+        if (!this.equippedItems || !this.equippedItems.boost) {
+            console.log('ℹ️ Нет бустов для применения эффектов');
+            return;
+        }
+
+        const boostId = this.equippedItems.boost;
+        console.log('🎮 Применяем игровые эффекты буста:', boostId);
+
+        // Super Jump - увеличивает высоту прыжка на 50%
+        if (boostId === 'boost_super_jump') {
+            this.jumpMultiplier = 1.5;
+            console.log('🚀 Высота прыжка увеличена на 50%');
+        }
+        
+        // Shield - защита от одного падения
+        if (boostId === 'boost_shield') {
+            this.hasShield = true;
+            console.log('🛡️ Щит активирован');
+        }
+        
+        // Mega Pack - комбо (прыжок + щит)
+        if (boostId === 'boost_mega_pack') {
+            this.jumpMultiplier = 1.5;
+            this.hasShield = true;
+            console.log('⭐ МЕГА БУСТ: Прыжок +50% + Щит');
+        }
+    }
+
     async applyBoostBonuses(baseScore) {
         console.log('🎯 applyBoostBonuses вызван с baseScore:', baseScore);
         console.log('🎯 equippedItems:', this.equippedItems);
@@ -4434,12 +4495,12 @@ class GameScene extends Phaser.Scene {
         console.log('✅ Применяем буст:', boostId);
         let bonusScore = 0;
 
-        // Бонусы от разных бустов
+        // Бонусы от разных бустов (к финальному счёту)
         const boostBonuses = {
-            'boost_super_jump': baseScore * 0.2,        // +20% к счёту
-            'boost_double_coins': baseScore * 1.0,      // +100% к счёту (удвоение → удваивает монеты)
-            'boost_shield': baseScore * 0.1,            // +10% к счёту
-            'boost_mega_pack': baseScore * 1.0,         // +100% к счёту (удвоение!)
+            'boost_super_jump': baseScore * 0.2,        // +20% к счёту (+ высота прыжка x1.5)
+            'boost_double_coins': baseScore * 1.0,      // +100% к счёту (= удваивает монеты)
+            'boost_shield': baseScore * 0.1,            // +10% к счёту (+ защита от падения)
+            'boost_mega_pack': baseScore * 1.0,         // +100% к счёту (+ прыжок x1.5 + щит)
             'trail_effect': 1000,                       // +1000 фиксированных очков
             'basic_platform_skin': 500                  // +500 фиксированных очков
         };
