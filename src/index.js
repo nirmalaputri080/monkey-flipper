@@ -1940,6 +1940,8 @@ class GameScene extends Phaser.Scene {
     constructor() {
     super({ key: 'GameScene' });
     this.player = null;
+    this.playerSkin = null; // НОВОЕ: Активный скин игрока
+    this.equippedItems = {}; // НОВОЕ: Все экипированные предметы
     this.isFalling = false;
     this.isJumping = false; // НОВОЕ: Флаг для состояния прыжка
     this.lastBouncePlatform = null; // ФИКС: Запоминаем последнюю платформу с которой прыгнули
@@ -2022,6 +2024,10 @@ class GameScene extends Phaser.Scene {
     }
 
     create(data) {
+        // ==================== LOAD EQUIPPED ITEMS ====================
+        const userData = getTelegramUserId();
+        this.loadEquippedItems(userData.id);
+        
         // ==================== MODE INITIALIZATION ====================
         // Проверяем режим: solo / 1v1 (matchmaking) / duel (challenge)
         
@@ -4334,6 +4340,57 @@ class GameScene extends Phaser.Scene {
         }
         
         console.log('✅ GameScene очищен успешно');
+    }
+
+    // ==================== EQUIPPED ITEMS SYSTEM ====================
+    async loadEquippedItems(userId) {
+        try {
+            const response = await fetch(`${API_SERVER_URL}/api/user/equipped/${userId}`);
+            const data = await response.json();
+            
+            if (data.success && data.equipped) {
+                this.equippedItems = data.equipped;
+                console.log('✅ Загружены экипированные предметы:', this.equippedItems);
+                
+                // Применяем скин если есть
+                if (this.equippedItems.skin) {
+                    this.playerSkin = this.equippedItems.skin;
+                    this.applySkinToPlayer();
+                }
+            }
+        } catch (error) {
+            console.error('❌ Ошибка загрузки экипировки:', error);
+        }
+    }
+
+    applySkinToPlayer() {
+        if (!this.player || !this.playerSkin) return;
+        
+        // Меняем цвет/эффект в зависимости от скина
+        const skinEffects = {
+            'skin_golden_monkey': { tint: 0xFFD700, glow: true },  // Золотой
+            'skin_cyber_monkey': { tint: 0x00FFFF, glow: true },   // Киберпанк
+            'skin_ninja_monkey': { tint: 0x1A1A1A, alpha: 0.9 },   // Ниндзя (темный)
+            'skin_fire': { tint: 0xFF4500, glow: true },           // Огненный
+            'skin_golden': { tint: 0xFFD700 }                      // Золотой (старый)
+        };
+
+        const effect = skinEffects[this.playerSkin];
+        if (effect) {
+            if (effect.tint) this.player.setTint(effect.tint);
+            if (effect.alpha) this.player.setAlpha(effect.alpha);
+            if (effect.glow) {
+                // Добавляем свечение (можно улучшить через шейдеры)
+                this.tweens.add({
+                    targets: this.player,
+                    alpha: 0.8,
+                    duration: 1000,
+                    yoyo: true,
+                    repeat: -1
+                });
+            }
+            console.log('🎨 Применён скин:', this.playerSkin);
+        }
     }
 }
 

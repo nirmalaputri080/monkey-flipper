@@ -190,6 +190,14 @@ const gameResultLimiter = rateLimit({
       CREATE INDEX IF NOT EXISTS idx_users_intro_seen ON users(intro_seen);
     `);
     
+    // Миграция: Добавляем колонку equipped_items для существующих пользователей
+    await pool.query(`
+      ALTER TABLE users 
+      ADD COLUMN IF NOT EXISTS equipped_items JSONB DEFAULT '{}'::jsonb;
+    `);
+    
+    console.log('✅ Миграция equipped_items выполнена');
+    
     // Таблица для обычных счетов
     await pool.query(`
       CREATE TABLE IF NOT EXISTS player_scores (
@@ -361,11 +369,55 @@ const gameResultLimiter = rateLimit({
       END $$;
     `);
     
-    console.log('✅ DB ready (player_scores + duels + wallets + transactions + purchases + migrations applied)');
+    // Таблица audit_log для отслеживания всех операций (пруфы)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS audit_log (
+        id SERIAL PRIMARY KEY,
+        event_type VARCHAR(50) NOT NULL,
+        user_id VARCHAR(255) NOT NULL,
+        item_id VARCHAR(50),
+        amount DECIMAL(20, 8),
+        currency VARCHAR(10),
+        payment_method VARCHAR(20),
+        status VARCHAR(20),
+        metadata JSONB,
+        ip_address VARCHAR(45),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id);
+      CREATE INDEX IF NOT EXISTS idx_audit_event ON audit_log(event_type);
+      CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at DESC);
+    `);
+    
+    console.log('✅ DB ready (player_scores + duels + wallets + transactions + purchases + audit_log + migrations applied)');
   } catch (err) {
     console.error('DB setup error', err);
   }
 })();
+
+// Функция логирования для audit trail
+async function logAudit(eventType, userId, data = {}) {
+  try {
+    await pool.query(`
+      INSERT INTO audit_log (event_type, user_id, item_id, amount, currency, payment_method, status, metadata, ip_address)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [
+      eventType,
+      userId,
+      data.itemId || null,
+      data.amount || null,
+      data.currency || null,
+      data.paymentMethod || null,
+      data.status || 'success',
+      data.metadata ? JSON.stringify(data.metadata) : null,
+      data.ipAddress || null
+    ]);
+    console.log(`📝 Audit log: ${eventType} for user ${userId}`);
+  } catch (err) {
+    console.error('❌ Audit log error:', err);
+    // Не прерываем выполнение, если логирование не удалось
+  }
+}
 
 // Save score (с rate limiting)
 // Save score (с rate limiting) - DEPRECATED: использовать /api/game-events для защиты от читерства
@@ -1222,6 +1274,17 @@ app.post('/api/shop/purchase', async (req, res) => {
     
     await client.query('COMMIT');
     
+    // Логируем покупку в audit_log
+    await logAudit('purchase', userId, {
+      itemId,
+      amount: price,
+      currency: 'monkey_coin',
+      paymentMethod: 'wallet',
+      status: 'completed',
+      metadata: { itemName, category: category || 'cosmetic' },
+      ipAddress: req.ip || req.headers['x-forwarded-for']
+    });
+    
     console.log(`✅ Purchase completed: ${itemName} for ${price} coins by ${userId}`);
     
     return res.json({
@@ -1333,6 +1396,39 @@ app.get('/api/user/equipped/:userId', async (req, res) => {
     });
   } catch (err) {
     console.error('Get equipped error:', err);
+    res.status(500).json({ success: false, error: 'DB error' });
+  }
+});
+
+// Получить историю покупок пользователя (audit log)
+app.get('/api/user/purchase-history/:userId', async (req, res) => {
+  const { userId } = req.params;
+  const limit = parseInt(req.query.limit) || 50;
+
+  try {
+    const result = await pool.query(`
+      SELECT 
+        event_type,
+        item_id,
+        amount,
+        currency,
+        payment_method,
+        status,
+        metadata,
+        created_at
+      FROM audit_log
+      WHERE user_id = $1 AND event_type IN ('purchase', 'purchase_stars', 'equip')
+      ORDER BY created_at DESC
+      LIMIT $2
+    `, [userId, limit]);
+
+    res.json({
+      success: true,
+      history: result.rows,
+      total: result.rows.length
+    });
+  } catch (err) {
+    console.error('Get purchase history error:', err);
     res.status(500).json({ success: false, error: 'DB error' });
   }
 });
