@@ -309,25 +309,29 @@
 
         // Переход в игру
         function goToGame() {
-            if (tg) {
-                // Закрываем Web App и возвращаемся к боту
-                tg.close();
-            } else {
-                // В браузере - открываем главную страницу
-                window.location.href = '/index.html';
-            }
+            // Просто возвращаемся на главную страницу игры
+            window.location.href = '/';
         }
 
         // Инициализация
         async function init() {
             try {
-                // Получаем userId из Telegram
-                if (tg?.initDataUnsafe?.user) {
+                // Получаем userId из Telegram (приоритет: WebApp > URL параметр)
+                if (tg?.initDataUnsafe?.user?.id) {
                     userId = tg.initDataUnsafe.user.id;
+                    console.log('✅ userId из Telegram WebApp:', userId);
                 } else {
-                    // Для тестирования без Telegram
-                    userId = 123456;
-                    console.warn('⚠️ Telegram не обнаружен, используем тестовый userId');
+                    // Пробуем получить из URL параметра (передаётся из игры)
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const urlUserId = urlParams.get('userId');
+                    
+                    if (urlUserId && urlUserId !== 'unknown' && !urlUserId.includes('anonymous')) {
+                        userId = parseInt(urlUserId);
+                        console.log('⚠️ userId из URL параметра:', userId);
+                    } else {
+                        // Последний вариант - показываем ошибку
+                        throw new Error('Не удалось определить пользователя. Откройте магазин из Telegram бота.');
+                    }
                 }
 
                 // Аутентификация

@@ -361,15 +361,14 @@ class MenuScene extends Phaser.Scene {
         console.log('⭐ Opening web shop...');
         const userData = getTelegramUserId();
         const userId = userData?.id || 'unknown';
-        const shopUrl = `${window.location.origin}/shop.html?userId=${userId}`;
         
-        // Попробуем открыть в Telegram WebApp
-        if (window.Telegram?.WebApp) {
-            window.Telegram.WebApp.openLink(shopUrl);
-        } else {
-            // Фоллбэк: открыть в новой вкладке
-            window.open(shopUrl, '_blank');
-        }
+        // Для Telegram Mini App используем относительный путь (откроется внутри WebApp)
+        const shopUrl = `/shop.html?userId=${userId}`;
+        
+        console.log('🛒 Opening shop with userId:', userId);
+        
+        // Открываем внутри того же окна (сохраняет контекст Telegram WebApp)
+        window.location.href = shopUrl;
     }
     
     // НОВОЕ: Загрузка баланса Monkey Coins
