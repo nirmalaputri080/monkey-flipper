@@ -4462,10 +4462,10 @@ class GameScene extends Phaser.Scene {
         const boostId = this.equippedItems.boost;
         console.log('🎮 Применяем игровые эффекты буста:', boostId);
 
-        // Super Jump - увеличивает высоту прыжка на 50%
+        // Super Jump - увеличивает высоту прыжка на 30%
         if (boostId === 'boost_super_jump') {
-            this.jumpMultiplier = 1.5;
-            console.log('🚀 Высота прыжка увеличена на 50%');
+            this.jumpMultiplier = 1.3; // Было 1.5 (слишком имбово)
+            console.log('🚀 Высота прыжка увеличена на 30%');
         }
         
         // Shield - защита от одного падения
@@ -4476,9 +4476,9 @@ class GameScene extends Phaser.Scene {
         
         // Mega Pack - комбо (прыжок + щит)
         if (boostId === 'boost_mega_pack') {
-            this.jumpMultiplier = 1.5;
+            this.jumpMultiplier = 1.3; // Было 1.5
             this.hasShield = true;
-            console.log('⭐ МЕГА БУСТ: Прыжок +50% + Щит');
+            console.log('⭐ МЕГА БУСТ: Прыжок +30% + Щит');
         }
     }
 
@@ -4497,12 +4497,12 @@ class GameScene extends Phaser.Scene {
 
         // Бонусы от разных бустов (к финальному счёту)
         const boostBonuses = {
-            'boost_super_jump': baseScore * 0.2,        // +20% к счёту (+ высота прыжка x1.5)
-            'boost_double_coins': baseScore * 1.0,      // +100% к счёту (= удваивает монеты)
+            'boost_super_jump': baseScore * 0.15,       // +15% к счёту (+ высота прыжка x1.3)
+            'boost_double_coins': baseScore * 0.5,      // +50% к счёту (было 100%, слишком имбово)
             'boost_shield': baseScore * 0.1,            // +10% к счёту (+ защита от падения)
-            'boost_mega_pack': baseScore * 1.0,         // +100% к счёту (+ прыжок x1.5 + щит)
-            'trail_effect': 1000,                       // +1000 фиксированных очков
-            'basic_platform_skin': 500                  // +500 фиксированных очков
+            'boost_mega_pack': baseScore * 0.5,         // +50% к счёту (+ прыжок x1.3 + щит)
+            'trail_effect': 500,                        // +500 фиксированных очков (было 1000)
+            'basic_platform_skin': 300                  // +300 фиксированных очков (было 500)
         };
 
         bonusScore = boostBonuses[boostId] || 0;

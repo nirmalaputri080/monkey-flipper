@@ -442,8 +442,8 @@ app.post('/api/save-score', gameResultLimiter, async (req, res) => {
 
     await client.query('INSERT INTO player_scores (user_id, username, score) VALUES ($1, $2, $3)', [userId, username, score]);
 
-    // Рассчитываем награду: 1 монета за каждые 100 очков
-    const coinsEarned = Math.floor(score / 100);
+    // Рассчитываем награду: 1 монета за каждые 150 очков (было 100 - слишком много)
+    const coinsEarned = Math.floor(score / 150);
     let newBalance = 0;
     
     if (coinsEarned > 0) {
@@ -579,8 +579,8 @@ app.post('/api/game-events', gameResultLimiter, async (req, res) => {
 
     await client.query('INSERT INTO player_scores (user_id, username, score) VALUES ($1, $2, $3)', [userId, username, finalScore]);
 
-    // Рассчитываем награду: 1 монета за каждые 100 очков
-    const coinsEarned = Math.floor(finalScore / 100);
+    // Рассчитываем награду: 1 монета за каждые 150 очков (было 100 - слишком много)
+    const coinsEarned = Math.floor(finalScore / 150);
     let newBalance = 0;
     
     if (coinsEarned > 0) {

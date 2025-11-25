@@ -101,7 +101,7 @@
       "category": "boosts",
       "priceStars": 15,
       "priceXTR": 1,
-      "priceCoins": 300,
+      "priceCoins": 600,
       "currency": "both",
       "duration": 10,
       "effect": {
@@ -117,7 +117,7 @@
       "category": "boosts",
       "priceStars": 20,
       "priceXTR": 2,
-      "priceCoins": 400,
+      "priceCoins": 800,
       "currency": "both",
       "duration": 5,
       "effect": {
@@ -133,7 +133,7 @@
       "category": "boosts",
       "priceStars": 10,
       "priceXTR": 1,
-      "priceCoins": 200,
+      "priceCoins": 400,
       "currency": "both",
       "duration": 3,
       "effect": {
@@ -149,7 +149,7 @@
       "category": "boosts",
       "priceStars": 50,
       "priceXTR": 5,
-      "priceCoins": 1000,
+      "priceCoins": 2000,
       "currency": "both",
       "duration": 15,
       "effect": {
@@ -165,7 +165,7 @@
       "name": "Basic Platform Skin",
       "description": "Простой скин для платформ",
       "category": "cosmetic",
-      "priceCoins": 500,
+      "priceCoins": 800,
       "currency": "coins",
       "image": "/assets/cosmetics/platform_basic.png"
     },
@@ -174,7 +174,7 @@
       "name": "Jump Trail Effect",
       "description": "Эффект следа при прыжке",
       "category": "cosmetic",
-      "priceCoins": 1000,
+      "priceCoins": 1500,
       "currency": "coins",
       "image": "/assets/cosmetics/trail_effect.png"
     }
