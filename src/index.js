@@ -2026,7 +2026,13 @@ class GameScene extends Phaser.Scene {
     create(data) {
         // ==================== LOAD EQUIPPED ITEMS ====================
         const userData = getTelegramUserId();
-        this.loadEquippedItems(userData.id);
+        
+        // Запускаем загрузку и продолжаем настройку игры
+        this.loadEquippedItems(userData.id).then(() => {
+            // После загрузки экипировки показываем бусты
+            console.log('✅ Экипировка загружена, показываем бусты');
+            this.showActiveBoosts();
+        });
         
         // ==================== MODE INITIALIZATION ====================
         // Проверяем режим: solo / 1v1 (matchmaking) / duel (challenge)
@@ -2166,8 +2172,7 @@ class GameScene extends Phaser.Scene {
         this.createPlatforms();
         this.createPlayer();
         
-        // Показываем активные бусты
-        this.showActiveBoosts();
+        // Бусты показываются после загрузки экипировки (см. loadEquippedItems)
         
         // Коллайдер с платформами (без фильтра)
         this.collider = this.physics.add.collider(
@@ -4417,11 +4422,16 @@ class GameScene extends Phaser.Scene {
     }
 
     async applyBoostBonuses(baseScore) {
+        console.log('🎯 applyBoostBonuses вызван с baseScore:', baseScore);
+        console.log('🎯 equippedItems:', this.equippedItems);
+        
         if (!this.equippedItems || !this.equippedItems.boost) {
+            console.log('⚠️ Нет экипированных бустов, возврат базового счёта');
             return baseScore; // Нет бустов
         }
 
         const boostId = this.equippedItems.boost;
+        console.log('✅ Применяем буст:', boostId);
         let bonusScore = 0;
 
         // Бонусы от разных бустов
@@ -4435,6 +4445,11 @@ class GameScene extends Phaser.Scene {
         };
 
         bonusScore = boostBonuses[boostId] || 0;
+        
+        if (bonusScore === 0) {
+            console.warn(`⚠️ Буст ${boostId} не найден в boostBonuses! Доступные:`, Object.keys(boostBonuses));
+        }
+        
         const finalScore = Math.floor(baseScore + bonusScore);
 
         console.log(`💎 Буст ${boostId}: ${baseScore} + ${bonusScore} = ${finalScore}`);
@@ -4443,13 +4458,19 @@ class GameScene extends Phaser.Scene {
     }
 
     showActiveBoosts() {
-        if (!this.equippedItems) return;
+        console.log('🔍 showActiveBoosts вызван, equippedItems:', this.equippedItems);
+        
+        if (!this.equippedItems) {
+            console.log('⚠️ equippedItems не загружены');
+            return;
+        }
 
         let boostText = '';
         let boostIcon = '';
 
         // Показываем активный буст
         if (this.equippedItems.boost) {
+            console.log('✅ Найден экипированный буст:', this.equippedItems.boost);
             const boostNames = {
                 'boost_super_jump': '🚀 Супер прыжок (+20%)',
                 'boost_double_coins': '💰 Двойные монеты (+50%)',
@@ -4461,6 +4482,9 @@ class GameScene extends Phaser.Scene {
             
             boostText = boostNames[this.equippedItems.boost] || 'Буст активен';
             boostIcon = '🎁';
+            console.log('💎 Текст буста для показа:', boostText);
+        } else {
+            console.log('⚠️ Нет активного буста для отображения');
         }
 
         if (boostText) {
