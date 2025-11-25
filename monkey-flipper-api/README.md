@@ -119,3 +119,4 @@ npm start
 - ✅ **Render API Server** - обработка запросов
 - ✅ **Render Socket.IO** - 1v1 режим
 - ✅ **Vercel** - хостинг игры
+# Bot token configured on Render
