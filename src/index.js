@@ -4465,47 +4465,40 @@ class GameScene extends Phaser.Scene {
             return;
         }
 
-        let boostText = '';
-        let boostIcon = '';
-
         // Показываем активный буст
         if (this.equippedItems.boost) {
             console.log('✅ Найден экипированный буст:', this.equippedItems.boost);
-            const boostNames = {
-                'boost_super_jump': '🚀 Супер прыжок (+20%)',
-                'boost_double_coins': '💰 Двойные монеты (x2)',
-                'boost_shield': '🛡️ Щит (+10%)',
-                'boost_mega_pack': '⭐ МЕГА БУСТ (x2)',
-                'trail_effect': '✨ След (+1000)',
-                'basic_platform_skin': '🎨 Скин (+500)'
+            
+            // Иконки для каждого буста
+            const boostIcons = {
+                'boost_super_jump': '🚀',
+                'boost_double_coins': '💰',
+                'boost_shield': '🛡️',
+                'boost_mega_pack': '⭐',
+                'trail_effect': '✨',
+                'basic_platform_skin': '🎨'
             };
             
-            boostText = boostNames[this.equippedItems.boost] || 'Буст активен';
-            boostIcon = '🎁';
-            console.log('💎 Текст буста для показа:', boostText);
-        } else {
-            console.log('⚠️ Нет активного буста для отображения');
-        }
+            const icon = boostIcons[this.equippedItems.boost] || '🎁';
+            console.log('💎 Отображаем иконку буста:', icon);
 
-        if (boostText) {
-            const boostBadge = this.add.text(CONSTS.WIDTH / 2, 50, boostText, {
-                fontSize: '16px',
-                fill: '#FFD700',
-                backgroundColor: '#000000',
-                padding: { x: 10, y: 5 },
-                fontStyle: 'bold'
+            // Иконка в правом верхнем углу
+            const boostIcon = this.add.text(CONSTS.WIDTH - 50, 30, icon, {
+                fontSize: '40px',
+                fill: '#FFD700'
             }).setOrigin(0.5).setDepth(100).setScrollFactor(0);
 
             // Анимация пульсации
             this.tweens.add({
-                targets: boostBadge,
-                scaleX: 1.1,
-                scaleY: 1.1,
-                duration: 1000,
+                targets: boostIcon,
+                scale: 1.2,
+                duration: 800,
                 yoyo: true,
                 repeat: -1,
                 ease: 'Sine.easeInOut'
             });
+        } else {
+            console.log('⚠️ Нет активного буста для отображения');
         }
     }
 
