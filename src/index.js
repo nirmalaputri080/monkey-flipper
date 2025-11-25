@@ -4437,7 +4437,7 @@ class GameScene extends Phaser.Scene {
         // Бонусы от разных бустов
         const boostBonuses = {
             'boost_super_jump': baseScore * 0.2,        // +20% к счёту
-            'boost_double_coins': baseScore * 0.5,      // +50% к счёту
+            'boost_double_coins': baseScore * 1.0,      // +100% к счёту (удвоение → удваивает монеты)
             'boost_shield': baseScore * 0.1,            // +10% к счёту
             'boost_mega_pack': baseScore * 1.0,         // +100% к счёту (удвоение!)
             'trail_effect': 1000,                       // +1000 фиксированных очков
@@ -4473,9 +4473,9 @@ class GameScene extends Phaser.Scene {
             console.log('✅ Найден экипированный буст:', this.equippedItems.boost);
             const boostNames = {
                 'boost_super_jump': '🚀 Супер прыжок (+20%)',
-                'boost_double_coins': '💰 Двойные монеты (+50%)',
+                'boost_double_coins': '💰 Двойные монеты (x2)',
                 'boost_shield': '🛡️ Щит (+10%)',
-                'boost_mega_pack': '⭐ МЕГА БУСТ (+100%)',
+                'boost_mega_pack': '⭐ МЕГА БУСТ (x2)',
                 'trail_effect': '✨ След (+1000)',
                 'basic_platform_skin': '🎨 Скин (+500)'
             };
