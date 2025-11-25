@@ -1378,6 +1378,32 @@ app.post('/api/user/equip', async (req, res) => {
   }
 });
 
+// Снять предмет (удалить из equipped_items)
+app.post('/api/user/unequip', async (req, res) => {
+  const { userId, itemType } = req.body;
+  
+  if (!userId || !itemType) {
+    return res.status(400).json({ success: false, error: 'Missing parameters' });
+  }
+
+  try {
+    // Удаляем указанный тип из equipped_items
+    await pool.query(`
+      UPDATE users 
+      SET equipped_items = equipped_items - $1
+      WHERE telegram_id = $2
+    `, [itemType, userId]);
+
+    res.json({
+      success: true,
+      message: `${itemType} unequipped`
+    });
+  } catch (err) {
+    console.error('Unequip error:', err);
+    res.status(500).json({ success: false, error: 'Failed to unequip item' });
+  }
+});
+
 // Получить экипированные предметы пользователя
 app.get('/api/user/equipped/:userId', async (req, res) => {
   const { userId } = req.params;

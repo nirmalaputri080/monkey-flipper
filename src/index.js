@@ -4587,8 +4587,23 @@ class InventoryScene extends Phaser.Scene {
                 fill: isEquipped ? '#90EE90' : '#AAA'
             });
 
-            // Кнопка экипировки
-            if (!isEquipped) {
+            // Кнопки справа
+            if (isEquipped) {
+                // Кнопка "Снять" для экипированных предметов
+                const unequipBtn = this.add.graphics();
+                unequipBtn.fillStyle(0xFF5722, 1);
+                unequipBtn.fillRoundedRect(CONSTS.WIDTH - 140, y + 15, 110, 40, 8);
+
+                this.add.text(CONSTS.WIDTH - 85, y + 35, 'Снять', {
+                    fontSize: '14px',
+                    fill: '#FFF'
+                }).setOrigin(0.5);
+
+                const unequipZone = this.add.rectangle(CONSTS.WIDTH - 85, y + 35, 110, 40, 0x000000, 0)
+                    .setInteractive({ useHandCursor: true })
+                    .on('pointerdown', () => this.unequipItem(item));
+            } else {
+                // Кнопка "Экипировать"
                 const equipBtn = this.add.graphics();
                 equipBtn.fillStyle(0x2196F3, 1);
                 equipBtn.fillRoundedRect(CONSTS.WIDTH - 140, y + 15, 110, 40, 8);
@@ -4632,6 +4647,38 @@ class InventoryScene extends Phaser.Scene {
                 this.scene.restart();
             } else {
                 console.error('❌ Ошибка экипировки:', data.error);
+            }
+        } catch (error) {
+            console.error('❌ Ошибка запроса:', error);
+        }
+    }
+
+    async unequipItem(item) {
+        const userData = getTelegramUserId();
+        
+        // Определяем тип предмета
+        let itemType = 'skin';
+        if (item.item_id.includes('nft_')) itemType = 'nft';
+        else if (item.item_id.includes('boost_')) itemType = 'boost';
+
+        try {
+            const response = await fetch(`${API_SERVER_URL}/api/user/unequip`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: userData.id,
+                    itemType: itemType
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                console.log('✅ Снято:', item.item_name);
+                // Перезагружаем сцену
+                this.scene.restart();
+            } else {
+                console.error('❌ Ошибка снятия:', data.error);
             }
         } catch (error) {
             console.error('❌ Ошибка запроса:', error);

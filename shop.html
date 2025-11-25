@@ -384,9 +384,12 @@
 
         // Переход в игру
         function goToGame() {
-            // Просто возвращаемся на главную страницу игры
-            window.location.href = '/';
+            // Возвращаемся на главную страницу (где игра)
+            window.location.href = '/index.html';
         }
+        
+        // Алиас для обратной совместимости
+        const goBack = goToGame;
 
         // Инициализация
         async function init() {
@@ -811,11 +814,6 @@
             document.getElementById('shopContent').innerHTML = `
                 <div class="error">${message}</div>
             `;
-        }
-
-        // Вернуться в игру
-        function goBack() {
-            window.location.href = 'index.html';
         }
 
         // Запуск при загрузке
