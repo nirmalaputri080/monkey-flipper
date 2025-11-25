@@ -1319,10 +1319,17 @@ app.get('/api/shop/purchases/:userId', async (req, res) => {
   const { userId } = req.params;
   
   try {
+    // Группируем по item_id и считаем количество доступных предметов
     const result = await pool.query(`
-      SELECT item_id, item_name, price, status, purchased_at
+      SELECT 
+        item_id, 
+        item_name, 
+        MIN(price) as price, 
+        COUNT(*) as count,
+        MAX(purchased_at) as purchased_at
       FROM purchases
       WHERE user_id = $1 AND status = 'active'
+      GROUP BY item_id, item_name
       ORDER BY purchased_at DESC
     `, [userId]);
     
@@ -1344,19 +1351,32 @@ app.post('/api/user/equip', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Missing parameters' });
   }
 
+  const client = await pool.connect();
+
   try {
-    // Проверяем что предмет куплен
-    const purchase = await pool.query(
-      'SELECT * FROM purchases WHERE user_id = $1 AND item_id = $2 AND status = $3',
+    await client.query('BEGIN');
+
+    // Проверяем что есть доступный предмет (status='active')
+    const purchase = await client.query(
+      'SELECT id FROM purchases WHERE user_id = $1 AND item_id = $2 AND status = $3 LIMIT 1',
       [userId, itemId, 'active']
     );
 
     if (purchase.rows.length === 0) {
-      return res.status(403).json({ success: false, error: 'Item not owned' });
+      await client.query('ROLLBACK');
+      return res.status(403).json({ success: false, error: 'Item not owned or already equipped' });
     }
 
-    // Сохраняем экипировку в таблицу users (добавим поле equipped_items)
-    await pool.query(`
+    const purchaseId = purchase.rows[0].id;
+
+    // Меняем статус на 'equipped' - расходуем 1 предмет
+    await client.query(
+      'UPDATE purchases SET status = $1 WHERE id = $2',
+      ['equipped', purchaseId]
+    );
+
+    // Сохраняем экипировку в таблицу users
+    await client.query(`
       UPDATE users 
       SET equipped_items = jsonb_set(
         COALESCE(equipped_items, '{}'::jsonb),
@@ -1367,40 +1387,67 @@ app.post('/api/user/equip', async (req, res) => {
       WHERE telegram_id = $3
     `, [itemType, itemId, userId]);
 
+    await client.query('COMMIT');
+
     res.json({
       success: true,
       message: `${itemType} equipped`,
       equippedItem: { type: itemType, id: itemId }
     });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('Equip error:', err);
     res.status(500).json({ success: false, error: 'Failed to equip item' });
+  } finally {
+    client.release();
   }
 });
 
-// Снять предмет (удалить из equipped_items)
+// Снять предмет (удалить из equipped_items и вернуть в active)
 app.post('/api/user/unequip', async (req, res) => {
-  const { userId, itemType } = req.body;
+  const { userId, itemType, itemId } = req.body;
   
   if (!userId || !itemType) {
     return res.status(400).json({ success: false, error: 'Missing parameters' });
   }
 
+  const client = await pool.connect();
+
   try {
+    await client.query('BEGIN');
+
     // Удаляем указанный тип из equipped_items
-    await pool.query(`
+    await client.query(`
       UPDATE users 
       SET equipped_items = equipped_items - $1
       WHERE telegram_id = $2
     `, [itemType, userId]);
+
+    // Возвращаем один предмет обратно в 'active' статус
+    if (itemId) {
+      await client.query(`
+        UPDATE purchases 
+        SET status = 'active' 
+        WHERE id = (
+          SELECT id FROM purchases 
+          WHERE user_id = $1 AND item_id = $2 AND status = 'equipped' 
+          LIMIT 1
+        )
+      `, [userId, itemId]);
+    }
+
+    await client.query('COMMIT');
 
     res.json({
       success: true,
       message: `${itemType} unequipped`
     });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('Unequip error:', err);
     res.status(500).json({ success: false, error: 'Failed to unequip item' });
+  } finally {
+    client.release();
   }
 });
 

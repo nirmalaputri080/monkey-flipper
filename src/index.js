@@ -4573,8 +4573,9 @@ class InventoryScene extends Phaser.Scene {
             bg.fillStyle(isEquipped ? 0x4CAF50 : 0x333333, 0.8);
             bg.fillRoundedRect(20, y, CONSTS.WIDTH - 40, 70, 10);
 
-            // Название
-            this.add.text(40, y + 15, item.item_name, {
+            // Название с количеством
+            const countText = item.count > 1 ? ` x${item.count}` : '';
+            this.add.text(40, y + 15, item.item_name + countText, {
                 fontSize: '18px',
                 fill: '#FFF',
                 fontStyle: 'bold'
@@ -4667,7 +4668,8 @@ class InventoryScene extends Phaser.Scene {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     userId: userData.id,
-                    itemType: itemType
+                    itemType: itemType,
+                    itemId: item.item_id // Передаем itemId для возврата в active
                 })
             });
 
