@@ -182,6 +182,7 @@ const gameResultLimiter = rateLimit({
         telegram_id VARCHAR(255) PRIMARY KEY,
         username VARCHAR(255),
         intro_seen BOOLEAN DEFAULT FALSE,
+        equipped_items JSONB DEFAULT '{}'::jsonb,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         last_login TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -1269,6 +1270,70 @@ app.get('/api/shop/purchases/:userId', async (req, res) => {
   } catch (err) {
     console.error('Get purchases error', err);
     return res.status(500).json({ success: false, error: 'DB error' });
+  }
+});
+
+// Экипировать предмет (установить как активный)
+app.post('/api/user/equip', async (req, res) => {
+  const { userId, itemId, itemType } = req.body; // itemType: 'skin', 'boost', 'nft'
+  
+  if (!userId || !itemId || !itemType) {
+    return res.status(400).json({ success: false, error: 'Missing parameters' });
+  }
+
+  try {
+    // Проверяем что предмет куплен
+    const purchase = await pool.query(
+      'SELECT * FROM purchases WHERE user_id = $1 AND item_id = $2 AND status = $3',
+      [userId, itemId, 'active']
+    );
+
+    if (purchase.rows.length === 0) {
+      return res.status(403).json({ success: false, error: 'Item not owned' });
+    }
+
+    // Сохраняем экипировку в таблицу users (добавим поле equipped_items)
+    await pool.query(`
+      UPDATE users 
+      SET equipped_items = jsonb_set(
+        COALESCE(equipped_items, '{}'::jsonb),
+        ARRAY[$1],
+        to_jsonb($2::text),
+        true
+      )
+      WHERE telegram_id = $3
+    `, [itemType, itemId, userId]);
+
+    res.json({
+      success: true,
+      message: `${itemType} equipped`,
+      equippedItem: { type: itemType, id: itemId }
+    });
+  } catch (err) {
+    console.error('Equip error:', err);
+    res.status(500).json({ success: false, error: 'Failed to equip item' });
+  }
+});
+
+// Получить экипированные предметы пользователя
+app.get('/api/user/equipped/:userId', async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const result = await pool.query(
+      'SELECT equipped_items FROM users WHERE telegram_id = $1',
+      [userId]
+    );
+
+    const equipped = result.rows[0]?.equipped_items || {};
+
+    res.json({
+      success: true,
+      equipped: equipped
+    });
+  } catch (err) {
+    console.error('Get equipped error:', err);
+    res.status(500).json({ success: false, error: 'DB error' });
   }
 });
 

@@ -287,12 +287,13 @@ class MenuScene extends Phaser.Scene {
 
         // Кнопки - КОМПАКТНЫЕ ДЛЯ ТЕЛЕФОНА
         const buttons = [
-            { text: 'Start', y: CONSTS.HEIGHT / 2 - 100, callback: () => this.scene.start('GameScene') },
-            { text: '1v1 Online', y: CONSTS.HEIGHT / 2 - 40, callback: () => this.scene.start('MatchmakingScene') },
-            { text: 'Duels', y: CONSTS.HEIGHT / 2 + 20, callback: () => this.scene.start('DuelHistoryScene') },
-            { text: 'Leaderboard', y: CONSTS.HEIGHT / 2 + 80, callback: () => this.openLeaderboard() },
-            { text: '🎁 Free Coins', y: CONSTS.HEIGHT / 2 + 140, callback: () => this.showShop() },
-            { text: '⭐ Web Shop', y: CONSTS.HEIGHT / 2 + 200, callback: () => this.openWebShop() },
+            { text: 'Start', y: CONSTS.HEIGHT / 2 - 120, callback: () => this.scene.start('GameScene') },
+            { text: '1v1 Online', y: CONSTS.HEIGHT / 2 - 60, callback: () => this.scene.start('MatchmakingScene') },
+            { text: 'Duels', y: CONSTS.HEIGHT / 2 + 0, callback: () => this.scene.start('DuelHistoryScene') },
+            { text: 'Leaderboard', y: CONSTS.HEIGHT / 2 + 60, callback: () => this.openLeaderboard() },
+            { text: '🎒 Inventory', y: CONSTS.HEIGHT / 2 + 120, callback: () => this.scene.start('InventoryScene') },
+            { text: '🎁 Free Coins', y: CONSTS.HEIGHT / 2 + 180, callback: () => this.showShop() },
+            { text: '⭐ Web Shop', y: CONSTS.HEIGHT / 2 + 240, callback: () => this.openWebShop() },
             {
                 text: 'Exit', y: CONSTS.HEIGHT / 2 + 260, callback: () => {
                     if (!window.close()) {
@@ -4336,6 +4337,162 @@ class GameScene extends Phaser.Scene {
     }
 }
 
+// ==================== INVENTORY SCENE ====================
+class InventoryScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'InventoryScene' });
+        this.purchases = [];
+        this.equipped = {};
+    }
+
+    async create() {
+        // Фон
+        this.background = this.add.image(0, 0, 'background_img_menu').setOrigin(0, 0);
+        this.background.setDisplaySize(CONSTS.WIDTH, CONSTS.HEIGHT);
+
+        // Заголовок
+        this.add.text(CONSTS.WIDTH / 2, 50, '🎒 Инвентарь', {
+            fontSize: '32px',
+            fill: '#FFF',
+            fontStyle: 'bold'
+        }).setOrigin(0.5);
+
+        // Загружаем данные
+        const userData = getTelegramUserId();
+        await this.loadInventory(userData.id);
+
+        // Кнопка назад
+        const backBtn = this.add.graphics();
+        backBtn.fillStyle(0xFF0000, 1);
+        backBtn.fillRoundedRect(20, CONSTS.HEIGHT - 70, 120, 50, 8);
+        
+        const backText = this.add.text(80, CONSTS.HEIGHT - 45, 'Назад', {
+            fontSize: '20px',
+            fill: '#FFF'
+        }).setOrigin(0.5);
+
+        const backZone = this.add.rectangle(80, CONSTS.HEIGHT - 45, 120, 50, 0x000000, 0)
+            .setInteractive({ useHandCursor: true })
+            .on('pointerdown', () => this.scene.start('MenuScene'));
+    }
+
+    async loadInventory(userId) {
+        try {
+            // Загружаем покупки и экипировку
+            const [purchasesRes, equippedRes] = await Promise.all([
+                fetch(`${API_SERVER_URL}/api/shop/purchases/${userId}`),
+                fetch(`${API_SERVER_URL}/api/user/equipped/${userId}`)
+            ]);
+
+            const purchasesData = await purchasesRes.json();
+            const equippedData = await equippedRes.json();
+
+            if (purchasesData.success) {
+                this.purchases = purchasesData.purchases;
+            }
+
+            if (equippedData.success) {
+                this.equipped = equippedData.equipped;
+            }
+
+            this.displayItems();
+        } catch (error) {
+            console.error('❌ Ошибка загрузки инвентаря:', error);
+            this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2, 'Ошибка загрузки', {
+                fontSize: '20px',
+                fill: '#F00'
+            }).setOrigin(0.5);
+        }
+    }
+
+    displayItems() {
+        if (this.purchases.length === 0) {
+            this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2, 'Инвентарь пуст\n\nПокупайте предметы в магазине!', {
+                fontSize: '20px',
+                fill: '#FFF',
+                align: 'center'
+            }).setOrigin(0.5);
+            return;
+        }
+
+        const startY = 120;
+        const itemHeight = 80;
+
+        this.purchases.forEach((item, index) => {
+            const y = startY + (index * itemHeight);
+            const isEquipped = Object.values(this.equipped).includes(item.item_id);
+
+            // Фон предмета
+            const bg = this.add.graphics();
+            bg.fillStyle(isEquipped ? 0x4CAF50 : 0x333333, 0.8);
+            bg.fillRoundedRect(20, y, CONSTS.WIDTH - 40, 70, 10);
+
+            // Название
+            this.add.text(40, y + 15, item.item_name, {
+                fontSize: '18px',
+                fill: '#FFF',
+                fontStyle: 'bold'
+            });
+
+            // Статус
+            const statusText = isEquipped ? '✅ ЭКИПИРОВАНО' : 'Нажмите для экипировки';
+            this.add.text(40, y + 45, statusText, {
+                fontSize: '14px',
+                fill: isEquipped ? '#90EE90' : '#AAA'
+            });
+
+            // Кнопка экипировки
+            if (!isEquipped) {
+                const equipBtn = this.add.graphics();
+                equipBtn.fillStyle(0x2196F3, 1);
+                equipBtn.fillRoundedRect(CONSTS.WIDTH - 140, y + 15, 110, 40, 8);
+
+                this.add.text(CONSTS.WIDTH - 85, y + 35, 'Экипировать', {
+                    fontSize: '14px',
+                    fill: '#FFF'
+                }).setOrigin(0.5);
+
+                const equipZone = this.add.rectangle(CONSTS.WIDTH - 85, y + 35, 110, 40, 0x000000, 0)
+                    .setInteractive({ useHandCursor: true })
+                    .on('pointerdown', () => this.equipItem(item));
+            }
+        });
+    }
+
+    async equipItem(item) {
+        const userData = getTelegramUserId();
+        
+        // Определяем тип предмета по ID
+        let itemType = 'skin';
+        if (item.item_id.includes('nft_')) itemType = 'nft';
+        else if (item.item_id.includes('boost_')) itemType = 'boost';
+
+        try {
+            const response = await fetch(`${API_SERVER_URL}/api/user/equip`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: userData.id,
+                    itemId: item.item_id,
+                    itemType: itemType
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                console.log('✅ Экипировано:', item.item_name);
+                // Перезагружаем сцену
+                this.scene.restart();
+            } else {
+                console.error('❌ Ошибка экипировки:', data.error);
+            }
+        } catch (error) {
+            console.error('❌ Ошибка запроса:', error);
+        }
+    }
+}
+
 // Конфиг Phaser
 const config = {
     type: Phaser.WEBGL,
@@ -4364,7 +4521,7 @@ const config = {
             // Физика теперь адаптируется к частоте дисплея (60/120/144 Hz)
         },
     },
-    scene: [MenuScene, LeaderboardScene, ShopScene, MatchmakingScene, DuelHistoryScene, GameScene]
+    scene: [MenuScene, LeaderboardScene, ShopScene, InventoryScene, MatchmakingScene, DuelHistoryScene, GameScene]
 };
 
 // Инициализация
