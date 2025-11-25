@@ -2166,6 +2166,9 @@ class GameScene extends Phaser.Scene {
         this.createPlatforms();
         this.createPlayer();
         
+        // Показываем активные бусты
+        this.showActiveBoosts();
+        
         // Коллайдер с платформами (без фильтра)
         this.collider = this.physics.add.collider(
             this.player, 
@@ -3314,7 +3317,23 @@ class GameScene extends Phaser.Scene {
 
         // НОВОЕ: Отправляем счет на сервер АСИНХРОННО (не блокирует UI)
         const userData = getTelegramUserId();
-        saveScoreToServer(userData.id, userData.username, this.score)
+        
+        // Применяем бонусы от экипированных бустов
+        this.applyBoostBonuses(this.score).then(finalScore => {
+            if (finalScore > this.score) {
+                console.log(`🚀 Буст применён! ${this.score} → ${finalScore} (+${finalScore - this.score})`);
+                // Показываем бонус на экране
+                const boostText = this.add.text(CONSTS.WIDTH / 2, 250, `🚀 БУСТ: +${finalScore - this.score}`, {
+                    fontSize: '24px',
+                    fill: '#FFD700',
+                    fontStyle: 'bold',
+                    stroke: '#000',
+                    strokeThickness: 4
+                }).setOrigin(0.5).setDepth(1000);
+            }
+            
+            // Сохраняем финальный счёт с бонусами
+            saveScoreToServer(userData.id, userData.username, finalScore)
             .then(serverResult => {
                 if (serverResult.success) {
                     serverStatusText.setText('✅ Сохранено!');
@@ -3352,6 +3371,7 @@ class GameScene extends Phaser.Scene {
                 serverStatusText.setText('❌ Ошибка');
                 serverStatusText.setColor('#FF0000');
             });
+        }); // Закрываем applyBoostBonuses
     }
     
     // НОВОЕ: Завершение дуэли через API
@@ -4390,6 +4410,75 @@ class GameScene extends Phaser.Scene {
                 });
             }
             console.log('🎨 Применён скин:', this.playerSkin);
+        }
+    }
+
+    async applyBoostBonuses(baseScore) {
+        if (!this.equippedItems || !this.equippedItems.boost) {
+            return baseScore; // Нет бустов
+        }
+
+        const boostId = this.equippedItems.boost;
+        let bonusScore = 0;
+
+        // Бонусы от разных бустов
+        const boostBonuses = {
+            'boost_super_jump': baseScore * 0.2,        // +20% к счёту
+            'boost_double_coins': baseScore * 0.5,      // +50% к счёту
+            'boost_shield': baseScore * 0.1,            // +10% к счёту
+            'boost_mega_pack': baseScore * 1.0,         // +100% к счёту (удвоение!)
+            'trail_effect': 1000,                       // +1000 фиксированных очков
+            'basic_platform_skin': 500                  // +500 фиксированных очков
+        };
+
+        bonusScore = boostBonuses[boostId] || 0;
+        const finalScore = Math.floor(baseScore + bonusScore);
+
+        console.log(`💎 Буст ${boostId}: ${baseScore} + ${bonusScore} = ${finalScore}`);
+        
+        return finalScore;
+    }
+
+    showActiveBoosts() {
+        if (!this.equippedItems) return;
+
+        let boostText = '';
+        let boostIcon = '';
+
+        // Показываем активный буст
+        if (this.equippedItems.boost) {
+            const boostNames = {
+                'boost_super_jump': '🚀 Супер прыжок (+20%)',
+                'boost_double_coins': '💰 Двойные монеты (+50%)',
+                'boost_shield': '🛡️ Щит (+10%)',
+                'boost_mega_pack': '⭐ МЕГА БУСТ (+100%)',
+                'trail_effect': '✨ След (+1000)',
+                'basic_platform_skin': '🎨 Скин (+500)'
+            };
+            
+            boostText = boostNames[this.equippedItems.boost] || 'Буст активен';
+            boostIcon = '🎁';
+        }
+
+        if (boostText) {
+            const boostBadge = this.add.text(CONSTS.WIDTH / 2, 50, boostText, {
+                fontSize: '16px',
+                fill: '#FFD700',
+                backgroundColor: '#000000',
+                padding: { x: 10, y: 5 },
+                fontStyle: 'bold'
+            }).setOrigin(0.5).setDepth(100).setScrollFactor(0);
+
+            // Анимация пульсации
+            this.tweens.add({
+                targets: boostBadge,
+                scaleX: 1.1,
+                scaleY: 1.1,
+                duration: 1000,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
         }
     }
 }
