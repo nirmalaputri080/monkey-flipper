@@ -239,6 +239,56 @@
             background: rgba(255,255,255,0.2);
             color: white;
         }
+
+        .payment-methods {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .payment-button {
+            padding: 15px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 12px;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .payment-button:hover {
+            background: rgba(255,255,255,0.2);
+            transform: translateY(-2px);
+            border-color: rgba(255,255,255,0.5);
+        }
+
+        .payment-button:active {
+            transform: translateY(0);
+        }
+
+        .payment-button .icon {
+            font-size: 24px;
+            margin-right: 10px;
+        }
+
+        .payment-button .price {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        #singlePaymentSection {
+            display: none;
+        }
+
+        #multiPaymentSection {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -279,10 +329,34 @@
             <div class="icon" id="modalIcon">🎨</div>
             <h2 id="modalTitle">Купить предмет?</h2>
             <p id="modalDescription"></p>
-            <p id="modalPrice"></p>
-            <div class="modal-buttons">
-                <button class="modal-button cancel" onclick="closeModal()">Отмена</button>
-                <button class="modal-button buy" onclick="confirmBuy()">Купить</button>
+            
+            <!-- Один способ оплаты -->
+            <div id="singlePaymentSection">
+                <p id="modalPrice"></p>
+                <div class="modal-buttons">
+                    <button class="modal-button cancel" onclick="closeModal()">Отмена</button>
+                    <button class="modal-button buy" onclick="confirmBuy()">Купить</button>
+                </div>
+            </div>
+            
+            <!-- Несколько способов оплаты -->
+            <div id="multiPaymentSection">
+                <p style="margin-bottom: 15px; font-size: 14px;">Выберите способ оплаты:</p>
+                <div class="payment-methods">
+                    <button class="payment-button" id="payCoins" onclick="selectPayment('coins')" style="display: none;">
+                        <span><span class="icon">🪙</span> Monkey Coins</span>
+                        <span class="price" id="priceCoins">0</span>
+                    </button>
+                    <button class="payment-button" id="payStars" onclick="selectPayment('stars')" style="display: none;">
+                        <span><span class="icon">💰</span> STARS (игровые)</span>
+                        <span class="price" id="priceStars">0</span>
+                    </button>
+                    <button class="payment-button" id="payXTR" onclick="selectPayment('xtr')" style="display: none;">
+                        <span><span class="icon">⭐</span> Telegram Stars</span>
+                        <span class="price" id="priceXTR">0</span>
+                    </button>
+                </div>
+                <button class="modal-button cancel" onclick="closeModal()" style="margin-top: 15px; width: 100%;">Отмена</button>
             </div>
         </div>
     </div>
@@ -485,21 +559,47 @@
             document.getElementById('modalTitle').textContent = selectedItem.name;
             document.getElementById('modalDescription').textContent = selectedItem.description;
             
-            // Показываем все варианты оплаты
-            let priceText = 'Цена:<br>';
-            if (selectedItem.currency === 'both') {
-                priceText += `
-                    🪙 <strong>${selectedItem.priceCoins || selectedItem.priceStars * 20} Monkey Coins</strong><br>
-                    💰 <strong>${selectedItem.priceStars} STARS (игровые)</strong><br>
-                    ⭐ <strong>${selectedItem.priceXTR} Telegram Stars (XTR)</strong>
-                `;
-            } else if (selectedItem.currency === 'coins') {
-                priceText += `🪙 <strong>${selectedItem.priceCoins} Monkey Coins</strong>`;
-            } else {
-                priceText += `💰 <strong>${selectedItem.priceStars || selectedItem.price} STARS</strong>`;
-            }
+            // Сбрасываем выбор метода оплаты
+            selectedPaymentMethod = null;
             
-            document.getElementById('modalPrice').innerHTML = priceText;
+            // Проверяем сколько способов оплаты доступно
+            if (selectedItem.currency === 'both') {
+                // Несколько способов - показываем кнопки выбора
+                document.getElementById('singlePaymentSection').style.display = 'none';
+                document.getElementById('multiPaymentSection').style.display = 'block';
+                
+                // Настраиваем кнопки оплаты
+                if (selectedItem.priceCoins) {
+                    document.getElementById('payCoins').style.display = 'flex';
+                    document.getElementById('priceCoins').textContent = `${selectedItem.priceCoins} 🪙`;
+                }
+                if (selectedItem.priceStars) {
+                    document.getElementById('payStars').style.display = 'flex';
+                    document.getElementById('priceStars').textContent = `${selectedItem.priceStars} 💰`;
+                }
+                if (selectedItem.priceXTR) {
+                    document.getElementById('payXTR').style.display = 'flex';
+                    document.getElementById('priceXTR').textContent = `${selectedItem.priceXTR} ⭐`;
+                }
+            } else {
+                // Один способ - показываем обычную кнопку покупки
+                document.getElementById('singlePaymentSection').style.display = 'block';
+                document.getElementById('multiPaymentSection').style.display = 'none';
+                
+                let priceText = '';
+                if (selectedItem.currency === 'coins') {
+                    priceText = `🪙 <strong>${selectedItem.priceCoins} Monkey Coins</strong>`;
+                    selectedPaymentMethod = 'coins';
+                } else if (selectedItem.currency === 'xtr') {
+                    priceText = `⭐ <strong>${selectedItem.priceXTR} Telegram Stars</strong>`;
+                    selectedPaymentMethod = 'xtr';
+                } else {
+                    priceText = `💰 <strong>${selectedItem.priceStars || selectedItem.price} STARS</strong>`;
+                    selectedPaymentMethod = 'stars';
+                }
+                
+                document.getElementById('modalPrice').innerHTML = priceText;
+            }
 
             document.getElementById('buyModal').classList.add('active');
 
@@ -509,11 +609,23 @@
             }
         }
 
+        // Выбор способа оплаты
+        function selectPayment(method) {
+            selectedPaymentMethod = method;
+            console.log('💳 Выбран способ оплаты:', method);
+            confirmBuy();
+        }
+
         // Закрыть модальное окно
         function closeModal() {
             document.getElementById('buyModal').classList.remove('active');
             selectedItem = null;
             selectedPaymentMethod = null;
+            
+            // Скрываем все кнопки оплаты
+            document.getElementById('payCoins').style.display = 'none';
+            document.getElementById('payStars').style.display = 'none';
+            document.getElementById('payXTR').style.display = 'none';
         }
         
         let selectedPaymentMethod = null;
@@ -522,14 +634,13 @@
         async function confirmBuy() {
             if (!selectedItem) return;
             
-            // Если есть несколько способов оплаты - спрашиваем какой выбрать
-            if (selectedItem.currency === 'both' && !selectedPaymentMethod) {
-                const choice = prompt('Выберите способ оплаты:\n1 - Monkey Coins\n2 - STARS (игровые)\n3 - Telegram Stars (XTR)', '1');
-                if (choice === '1') selectedPaymentMethod = 'coins';
-                else if (choice === '2') selectedPaymentMethod = 'stars';
-                else if (choice === '3') selectedPaymentMethod = 'xtr';
-                else return;
+            // Проверяем что метод оплаты выбран
+            if (!selectedPaymentMethod) {
+                console.error('❌ Метод оплаты не выбран');
+                return;
             }
+            
+            console.log('🛒 Покупка:', selectedItem.name, 'за', selectedPaymentMethod);
 
             try {
                 let endpoint, body;
