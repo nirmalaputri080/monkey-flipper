@@ -1424,8 +1424,10 @@ app.post('/api/user/unequip', async (req, res) => {
     `, [itemType, userId]);
 
     // Возвращаем один предмет обратно в 'active' статус
+    // ВАЖНО: Только предметы со status='equipped' (не 'used')
+    // Израсходованные бусты (status='used') не возвращаются
     if (itemId) {
-      await client.query(`
+      const result = await client.query(`
         UPDATE purchases 
         SET status = 'active' 
         WHERE id = (
@@ -1433,7 +1435,12 @@ app.post('/api/user/unequip', async (req, res) => {
           WHERE user_id = $1 AND item_id = $2 AND status = 'equipped' 
           LIMIT 1
         )
+        RETURNING item_id
       `, [userId, itemId]);
+      
+      if (result.rows.length === 0) {
+        console.log(`ℹ️ Item ${itemId} not returned (may be consumed)`);
+      }
     }
 
     await client.query('COMMIT');
@@ -1446,6 +1453,63 @@ app.post('/api/user/unequip', async (req, res) => {
     await client.query('ROLLBACK');
     console.error('Unequip error:', err);
     res.status(500).json({ success: false, error: 'Failed to unequip item' });
+  } finally {
+    client.release();
+  }
+});
+
+// Расходовать буст после игры (превратить в 'used')
+app.post('/api/user/consume-boost', async (req, res) => {
+  const { userId } = req.body;
+  
+  if (!userId) {
+    return res.status(400).json({ success: false, error: 'Missing userId' });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // Получаем текущий экипированный буст
+    const userResult = await client.query(
+      'SELECT equipped_items FROM users WHERE telegram_id = $1',
+      [userId]
+    );
+
+    const equippedItems = userResult.rows[0]?.equipped_items || {};
+    const boostId = equippedItems.boost;
+
+    if (!boostId) {
+      await client.query('COMMIT');
+      return res.json({ success: true, message: 'No boost equipped' });
+    }
+
+    // Меняем статус буста на 'used' (буст израсходован)
+    await client.query(`
+      UPDATE purchases 
+      SET status = 'used' 
+      WHERE user_id = $1 AND item_id = $2 AND status = 'equipped'
+    `, [userId, boostId]);
+
+    // Удаляем буст из equipped_items
+    await client.query(`
+      UPDATE users 
+      SET equipped_items = equipped_items - 'boost'
+      WHERE telegram_id = $1
+    `, [userId]);
+
+    await client.query('COMMIT');
+
+    res.json({
+      success: true,
+      message: 'Boost consumed',
+      consumedBoostId: boostId
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Consume boost error:', err);
+    res.status(500).json({ success: false, error: 'Failed to consume boost' });
   } finally {
     client.release();
   }

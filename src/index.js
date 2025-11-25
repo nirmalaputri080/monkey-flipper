@@ -3342,6 +3342,9 @@ class GameScene extends Phaser.Scene {
                         serverStatusText.setText('✅ Новый рекорд!');
                     }
                     
+                    // НОВОЕ: Расходуем буст после завершения игры (если был экипирован)
+                    this.consumeBoostAfterGame(userData.id);
+                    
                     // НОВОЕ: Показываем полученные Monkey Coins
                     if (serverResult.coinsEarned > 0) {
                         coinsEarnedText.setText(`+${serverResult.coinsEarned} 🐵 Monkey Coins!`);
@@ -4479,6 +4482,27 @@ class GameScene extends Phaser.Scene {
                 repeat: -1,
                 ease: 'Sine.easeInOut'
             });
+        }
+    }
+
+    // Расходование буста после завершения игры
+    async consumeBoostAfterGame(userId) {
+        try {
+            const response = await fetch(`${API_SERVER_URL}/api/user/consume-boost`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId })
+            });
+
+            const data = await response.json();
+
+            if (data.success && data.consumedBoostId) {
+                console.log(`🔥 Буст израсходован: ${data.consumedBoostId}`);
+            } else {
+                console.log('ℹ️ Буст не был экипирован');
+            }
+        } catch (error) {
+            console.error('❌ Ошибка расходования буста:', error);
         }
     }
 }
