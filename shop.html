@@ -378,6 +378,7 @@
         let userId = null;
         let jwt = null;
         let shopItems = [];
+        let purchasedItems = []; // Список купленных товаров
         let selectedItem = null;
         let currentCategory = 'all';
 
@@ -414,7 +415,8 @@
                 // Загружаем данные
                 await Promise.all([
                     loadBalance(),
-                    loadShopItems()
+                    loadShopItems(),
+                    loadPurchases()
                 ]);
 
                 setupTabs();
@@ -494,6 +496,24 @@
             }
         }
 
+        // Загрузка купленных товаров
+        async function loadPurchases() {
+            try {
+                const response = await fetch(`${API_URL}/api/shop/purchases/${userId}`, {
+                    headers: { 'Authorization': `Bearer ${jwt}` }
+                });
+
+                const data = await response.json();
+                if (data.success && data.purchases) {
+                    purchasedItems = data.purchases.map(p => p.item_id);
+                    console.log('✅ Куплено предметов:', purchasedItems.length, purchasedItems);
+                    renderItems(); // Перерисовываем после загрузки покупок
+                }
+            } catch (error) {
+                console.error('❌ Ошибка загрузки покупок:', error);
+            }
+        }
+
         // Отрисовка товаров
         function renderItems() {
             const container = document.getElementById('shopContent');
@@ -507,29 +527,35 @@
             }
 
             container.innerHTML = filtered.map(item => {
+                const isPurchased = purchasedItems.includes(item.id);
                 let priceHtml = '';
                 
-                // Показываем разные варианты оплаты
-                if (item.currency === 'both') {
-                    priceHtml = `
-                        <div class="price coins" style="margin-bottom: 5px">
-                            🪙 ${item.priceCoins || item.priceStars * 20} Coins
-                        </div>
-                        <div class="price stars" style="margin-bottom: 5px">
-                            💰 ${item.priceStars} STARS
-                        </div>
-                        <div class="price" style="background: linear-gradient(135deg, #667eea, #764ba2); color: #fff">
-                            ⭐ ${item.priceXTR} XTR
-                        </div>
-                    `;
-                } else if (item.currency === 'coins') {
-                    priceHtml = `<div class="price coins">🪙 ${item.priceCoins}</div>`;
+                if (isPurchased) {
+                    // Если куплено - показываем статус
+                    priceHtml = `<div class="price" style="background: #4CAF50; color: white; font-weight: bold;">✅ КУПЛЕНО</div>`;
                 } else {
-                    priceHtml = `<div class="price stars">💰 ${item.priceStars || item.price} STARS</div>`;
+                    // Показываем разные варианты оплаты
+                    if (item.currency === 'both') {
+                        priceHtml = `
+                            <div class="price coins" style="margin-bottom: 5px">
+                                🪙 ${item.priceCoins || item.priceStars * 20} Coins
+                            </div>
+                            <div class="price stars" style="margin-bottom: 5px">
+                                💰 ${item.priceStars} STARS
+                            </div>
+                            <div class="price" style="background: linear-gradient(135deg, #667eea, #764ba2); color: #fff">
+                                ⭐ ${item.priceXTR} XTR
+                            </div>
+                        `;
+                    } else if (item.currency === 'coins') {
+                        priceHtml = `<div class="price coins">🪙 ${item.priceCoins}</div>`;
+                    } else {
+                        priceHtml = `<div class="price stars">💰 ${item.priceStars || item.price} STARS</div>`;
+                    }
                 }
                 
                 return `
-                    <div class="item-card" onclick="showBuyModal('${item.id}')">
+                    <div class="item-card" onclick="${isPurchased ? '' : `showBuyModal('${item.id}')`}" style="${isPurchased ? 'opacity: 0.7; cursor: default;' : ''}">
                         <div class="icon">${getItemIcon(item.category)}</div>
                         <div class="name">${item.name}</div>
                         <div class="description">${item.description}</div>
@@ -642,6 +668,17 @@
             
             console.log('🛒 Покупка:', selectedItem.name, 'за', selectedPaymentMethod);
 
+            // Показываем индикатор загрузки
+            const modalContent = document.querySelector('.modal-content');
+            const originalHTML = modalContent.innerHTML;
+            modalContent.innerHTML = `
+                <div style="text-align: center; padding: 40px;">
+                    <div style="font-size: 48px; margin-bottom: 20px;">⏳</div>
+                    <h2>Обработка платежа...</h2>
+                    <p style="opacity: 0.8;">Пожалуйста, подождите</p>
+                </div>
+            `;
+
             try {
                 let endpoint, body;
                 
@@ -654,17 +691,22 @@
                     };
                 } else if (selectedPaymentMethod === 'coins' || selectedItem.currency === 'coins') {
                     // Покупка за Monkey Coins
-                    endpoint = '/api/shop/buy';
-                    body = {
-                        userId: userId,
-                        itemId: selectedItem.id
-                    };
-                } else {
-                    // Покупка за игровые STARS
-                    endpoint = '/api/shop/buy-stars';
+                    endpoint = '/api/shop/purchase';
                     body = {
                         userId: userId,
                         itemId: selectedItem.id,
+                        itemName: selectedItem.name,
+                        price: selectedItem.priceCoins,
+                        category: selectedItem.category
+                    };
+                } else {
+                    // Покупка за игровые STARS
+                    endpoint = '/api/shop/purchase-stars';
+                    body = {
+                        userId: userId,
+                        itemId: selectedItem.id,
+                        itemName: selectedItem.name,
+                        priceStars: selectedItem.priceStars,
                         signature: 'client_signature_placeholder'
                     };
                 }
@@ -686,30 +728,65 @@
                         if (tg?.HapticFeedback) {
                             tg.HapticFeedback.notificationOccurred('success');
                         }
-                        alert(`✅ Инвойс создан!\nПлатеж будет обработан через Telegram Stars.\nСумма: ${selectedItem.priceXTR} XTR`);
-                        closeModal();
-                        // TODO: Открыть инвойс в Telegram
+                        
+                        modalContent.innerHTML = `
+                            <div style="text-align: center; padding: 30px;">
+                                <div style="font-size: 64px; margin-bottom: 20px;">✅</div>
+                                <h2>Инвойс создан!</h2>
+                                <p style="margin: 15px 0;">Платеж будет обработан через Telegram Stars</p>
+                                <p style="font-size: 20px; font-weight: bold; color: #FFD700;">⭐ ${selectedItem.priceXTR} XTR</p>
+                                <button class="modal-button buy" onclick="closeModal()" style="margin-top: 20px; width: 100%;">Понятно</button>
+                            </div>
+                        `;
+                        
+                        // Перезагружаем покупки через 2 секунды
+                        setTimeout(() => {
+                            loadPurchases();
+                        }, 2000);
                     } else {
-                        // Обычная покупка за Coins/STARS
+                        // Обычная покупка за Coins/STARS - УСПЕХ!
                         if (tg?.HapticFeedback) {
                             tg.HapticFeedback.notificationOccurred('success');
                         }
                         
-                        const balanceText = data.newBalance ? `\nНовый баланс: ${data.newBalance.toLocaleString()}` : '';
-                        alert(`✅ Куплено: ${selectedItem.name}!${balanceText}`);
+                        const balanceText = data.newBalance ? `Новый баланс: ${data.newBalance.toLocaleString()} 🪙` : '';
                         
-                        // Обновляем баланс
-                        await loadBalance();
-                        closeModal();
+                        modalContent.innerHTML = `
+                            <div style="text-align: center; padding: 30px;">
+                                <div style="font-size: 64px; margin-bottom: 20px;">🎉</div>
+                                <h2>Покупка успешна!</h2>
+                                <p style="margin: 15px 0; font-size: 18px; font-weight: bold;">${selectedItem.name}</p>
+                                <p style="opacity: 0.8;">✅ Предмет добавлен в ваш инвентарь</p>
+                                ${balanceText ? `<p style="margin-top: 10px; font-size: 14px;">${balanceText}</p>` : ''}
+                                <button class="modal-button buy" onclick="closeModal()" style="margin-top: 20px; width: 100%;">Отлично!</button>
+                            </div>
+                        `;
+                        
+                        // Обновляем баланс и покупки
+                        await Promise.all([
+                            loadBalance(),
+                            loadPurchases()
+                        ]);
                     }
                 } else {
                     throw new Error(data.error || 'Ошибка покупки');
                 }
             } catch (error) {
+                // Восстанавливаем модалку и показываем ошибку
+                modalContent.innerHTML = originalHTML;
+                
                 if (tg?.HapticFeedback) {
                     tg.HapticFeedback.notificationOccurred('error');
                 }
-                alert('❌ ' + error.message);
+                
+                modalContent.innerHTML = `
+                    <div style="text-align: center; padding: 30px;">
+                        <div style="font-size: 64px; margin-bottom: 20px;">❌</div>
+                        <h2>Ошибка покупки</h2>
+                        <p style="margin: 15px 0; color: #ff6b6b;">${error.message}</p>
+                        <button class="modal-button cancel" onclick="closeModal()" style="margin-top: 20px; width: 100%;">Закрыть</button>
+                    </div>
+                `;
             }
         }
 
