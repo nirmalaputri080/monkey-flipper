@@ -513,12 +513,14 @@
                     // Сохраняем данные о времени истечения
                     purchasedData = {};
                     data.purchases.forEach(p => {
+                        console.log('📦 Purchase data:', p.item_id, p);
                         purchasedData[p.item_id] = {
                             expires_at: p.expires_at,
                             purchased_at: p.purchased_at
                         };
                     });
-                    console.log('✅ Куплено предметов:', purchasedItems.length, purchasedItems);
+                    console.log('✅ Куплено предметов:', purchasedItems.length);
+                    console.log('📦 purchasedData:', purchasedData);
                     renderItems(); // Перерисовываем после загрузки покупок
                 }
             } catch (error) {
@@ -545,14 +547,32 @@
                 if (isPurchased) {
                     // Если куплено - показываем статус и время истечения
                     const purchaseInfo = purchasedData[item.id];
-                    let timeLeft = '';
-                    if (purchaseInfo?.expires_at) {
-                        const expiresAt = new Date(purchaseInfo.expires_at);
-                        const now = new Date();
-                        const hoursLeft = Math.max(0, Math.floor((expiresAt - now) / (1000 * 60 * 60)));
-                        const minsLeft = Math.max(0, Math.floor(((expiresAt - now) % (1000 * 60 * 60)) / (1000 * 60)));
-                        timeLeft = hoursLeft > 0 ? `${hoursLeft}ч ${minsLeft}м` : `${minsLeft}м`;
+                    let timeLeft = '24ч';
+                    
+                    if (purchaseInfo) {
+                        // Вычисляем время истечения
+                        let expiresAt;
+                        if (purchaseInfo.expires_at) {
+                            expiresAt = new Date(purchaseInfo.expires_at);
+                        } else if (purchaseInfo.purchased_at) {
+                            // Fallback: purchased_at + 24 часа
+                            expiresAt = new Date(purchaseInfo.purchased_at);
+                            expiresAt.setHours(expiresAt.getHours() + 24);
+                        }
+                        
+                        if (expiresAt) {
+                            const now = new Date();
+                            const diffMs = expiresAt - now;
+                            if (diffMs > 0) {
+                                const hoursLeft = Math.floor(diffMs / (1000 * 60 * 60));
+                                const minsLeft = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                                timeLeft = hoursLeft > 0 ? `${hoursLeft}ч ${minsLeft}м` : `${minsLeft}м`;
+                            } else {
+                                timeLeft = 'истекло';
+                            }
+                        }
                     }
+                    
                     priceHtml = `<div class="price" style="background: #4CAF50; color: white; font-weight: bold;">✅ КУПЛЕНО</div>
                                  <div style="font-size: 11px; color: #888; margin-top: 4px;">⏱ Осталось: ${timeLeft}</div>`;
                 } else {
