@@ -3789,7 +3789,7 @@ app.get('/api/admin/stars-transactions', validateAdmin, async (req, res) => {
         id: tx.id,
         amount: tx.amount,
         date: tx.date,
-        user: tx.source?.user || null
+        source: tx.source // Полная информация включая user и invoice_payload
       };
     });
     
@@ -3801,6 +3801,32 @@ app.get('/api/admin/stars-transactions', validateAdmin, async (req, res) => {
   } catch (err) {
     console.error('Admin stars error:', err);
     res.json({ success: true, totalStars: 0, transactions: [] });
+  }
+});
+
+// Возврат Stars по payload (для транзакций из Telegram API)
+app.post('/api/admin/refund-by-payload', validateAdmin, async (req, res) => {
+  try {
+    const { userId, payload } = req.body;
+    
+    if (!userId || !payload) {
+      return res.status(400).json({ success: false, error: 'userId and payload required' });
+    }
+    
+    // Для возврата нужен telegram_payment_charge_id, но у нас его нет
+    // Попробуем найти по payload или просто уведомим что нужен charge_id
+    console.log(`💸 Запрос на возврат: userId=${userId}, payload=${payload}`);
+    
+    // К сожалению, без telegram_payment_charge_id нельзя сделать refund через API
+    // Нужно было сохранять его при successful_payment
+    res.json({ 
+      success: false, 
+      error: 'Для возврата нужен telegram_payment_charge_id. Этот платёж был до webhook и charge_id не сохранён. Верните звёзды вручную через @BotFather → My Bots → Payments.' 
+    });
+    
+  } catch (err) {
+    console.error('Refund by payload error:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

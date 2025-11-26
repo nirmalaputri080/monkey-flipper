@@ -225,7 +225,14 @@
             </div>
 
             <div class="section">
-                <h2>⭐ Покупки за Stars (с возвратом)</h2>
+                <h2>⭐ Транзакции Stars (из Telegram)</h2>
+                <div id="starsTransactionsList">
+                    <div class="loading">Загрузка...</div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>📦 Покупки Stars (из БД)</h2>
                 <div id="starsPurchases">
                     <div class="loading">Загрузка...</div>
                 </div>
@@ -299,6 +306,7 @@
                 
                 if (starsData.success) {
                     document.getElementById('starsBalance').textContent = starsData.totalStars + ' ⭐';
+                    renderStarsTransactions(starsData.transactions || []);
                 }
 
                 // Загружаем покупки Stars с возможностью возврата
@@ -327,6 +335,66 @@
 
             } catch (err) {
                 console.error('Error loading stats:', err);
+            }
+        }
+
+        function renderStarsTransactions(transactions) {
+            const container = document.getElementById('starsTransactionsList');
+            
+            if (!transactions || transactions.length === 0) {
+                container.innerHTML = '<div class="loading">Нет транзакций Stars</div>';
+                return;
+            }
+
+            container.innerHTML = transactions.map(tx => {
+                const user = tx.source?.user || {};
+                const username = user.username ? `@${user.username}` : `User ${user.id}`;
+                const firstName = user.first_name || '';
+                const date = new Date(tx.date * 1000).toLocaleString('ru-RU');
+                
+                return `
+                <div class="transaction">
+                    <div class="user">
+                        <span class="username">${firstName} (${username})</span>
+                        <span class="date">${date}</span>
+                        <span class="date" style="font-size: 10px; opacity: 0.5;">ID: ${tx.source?.invoice_payload || 'N/A'}</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div class="amount" style="color: #FFD700;">${tx.amount} ⭐</div>
+                        <button onclick="refundTransaction(${user.id}, '${tx.source?.invoice_payload || ''}')" 
+                                style="padding: 5px 10px; background: #ff6b6b; border: none; border-radius: 5px; color: white; cursor: pointer; font-size: 12px;">
+                            ↩️ Вернуть
+                        </button>
+                    </div>
+                </div>
+            `}).join('');
+        }
+
+        async function refundTransaction(userId, payload) {
+            if (!confirm(\`Вернуть Stars пользователю \${userId}?\\nPayload: \${payload}\\n\\nЭто действие нельзя отменить.\`)) {
+                return;
+            }
+            
+            try {
+                const res = await fetch(\`\${API_URL}/api/admin/refund-by-payload\`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': \`Bearer \${adminToken}\`
+                    },
+                    body: JSON.stringify({ userId, payload })
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    alert('✅ ' + data.message);
+                    loadStats();
+                } else {
+                    alert('❌ Ошибка: ' + data.error);
+                }
+            } catch (err) {
+                alert('❌ Ошибка: ' + err.message);
             }
         }
 
