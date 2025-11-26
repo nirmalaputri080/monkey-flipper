@@ -1657,12 +1657,12 @@ app.post('/api/shop/purchase', async (req, res) => {
   }
 });
 
-// Получить купленные товары пользователя
+// Получить купленные товары пользователя (только активные за последние 24 часа)
 app.get('/api/shop/purchases/:userId', async (req, res) => {
   const { userId } = req.params;
   
   try {
-    // Группируем по item_id и считаем количество доступных предметов
+    // Показываем только покупки за последние 24 часа
     // ВАЖНО: Показываем и 'active' и 'equipped' предметы (но НЕ 'used')
     const result = await pool.query(`
       SELECT 
@@ -1671,9 +1671,12 @@ app.get('/api/shop/purchases/:userId', async (req, res) => {
         MIN(price) as price, 
         COUNT(*) FILTER (WHERE status = 'active') as count,
         COUNT(*) FILTER (WHERE status = 'equipped') as equipped_count,
-        MAX(purchased_at) as purchased_at
+        MAX(purchased_at) as purchased_at,
+        MAX(purchased_at) + INTERVAL '24 hours' as expires_at
       FROM purchases
-      WHERE user_id = $1 AND status IN ('active', 'equipped')
+      WHERE user_id = $1 
+        AND status IN ('active', 'equipped')
+        AND purchased_at > NOW() - INTERVAL '24 hours'
       GROUP BY item_id, item_name
       ORDER BY purchased_at DESC
     `, [userId]);

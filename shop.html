@@ -381,6 +381,7 @@
         let jwt = null;
         let shopItems = [];
         let purchasedItems = []; // Список купленных товаров
+        let purchasedData = {}; // Данные о покупках с временем истечения
         let selectedItem = null;
         let currentCategory = 'all';
 
@@ -509,6 +510,14 @@
                 const data = await response.json();
                 if (data.success && data.purchases) {
                     purchasedItems = data.purchases.map(p => p.item_id);
+                    // Сохраняем данные о времени истечения
+                    purchasedData = {};
+                    data.purchases.forEach(p => {
+                        purchasedData[p.item_id] = {
+                            expires_at: p.expires_at,
+                            purchased_at: p.purchased_at
+                        };
+                    });
                     console.log('✅ Куплено предметов:', purchasedItems.length, purchasedItems);
                     renderItems(); // Перерисовываем после загрузки покупок
                 }
@@ -534,8 +543,18 @@
                 let priceHtml = '';
                 
                 if (isPurchased) {
-                    // Если куплено - показываем статус
-                    priceHtml = `<div class="price" style="background: #4CAF50; color: white; font-weight: bold;">✅ КУПЛЕНО</div>`;
+                    // Если куплено - показываем статус и время истечения
+                    const purchaseInfo = purchasedData[item.id];
+                    let timeLeft = '';
+                    if (purchaseInfo?.expires_at) {
+                        const expiresAt = new Date(purchaseInfo.expires_at);
+                        const now = new Date();
+                        const hoursLeft = Math.max(0, Math.floor((expiresAt - now) / (1000 * 60 * 60)));
+                        const minsLeft = Math.max(0, Math.floor(((expiresAt - now) % (1000 * 60 * 60)) / (1000 * 60)));
+                        timeLeft = hoursLeft > 0 ? `${hoursLeft}ч ${minsLeft}м` : `${minsLeft}м`;
+                    }
+                    priceHtml = `<div class="price" style="background: #4CAF50; color: white; font-weight: bold;">✅ КУПЛЕНО</div>
+                                 <div style="font-size: 11px; color: #888; margin-top: 4px;">⏱ Осталось: ${timeLeft}</div>`;
                 } else {
                     // Показываем варианты оплаты: Coins, Telegram Stars, TON
                     if (item.currency === 'both' || item.priceXTR || item.priceTON) {
@@ -558,7 +577,7 @@
                 }
                 
                 return `
-                    <div class="item-card" onclick="${isPurchased ? '' : `showBuyModal('${item.id}')`}" style="${isPurchased ? 'opacity: 0.7; cursor: default;' : ''}">
+                    <div class="item-card" ${isPurchased ? '' : `onclick="showBuyModal('${item.id}')"`} style="${isPurchased ? 'opacity: 0.7; cursor: default;' : 'cursor: pointer;'}">
                         <div class="icon">${getItemIcon(item.category)}</div>
                         <div class="name">${item.name}</div>
                         <div class="description">${item.description}</div>
