@@ -6251,12 +6251,12 @@ class ReferralScene extends Phaser.Scene {
             fontFamily: 'Arial'
         }).setOrigin(0.5);
 
-        // Формируем ссылку
-        const botUsername = 'MonkeyFlipperBot'; // Имя бота
-        const referralLink = `https://t.me/${botUsername}?start=ref_${userId}`;
+        // Формируем ссылку для Mini App
+        const botUsername = 'monkey_test_crypto_bot'; // Имя бота
+        const referralLink = `https://t.me/${botUsername}?startapp=ref_${userId}`;
         
         // Показываем короткую версию
-        const shortLink = `t.me/${botUsername}?start=ref_${userId}`;
+        const shortLink = `t.me/${botUsername}?startapp=ref_${userId}`;
         
         this.add.text(CONSTS.WIDTH / 2, y + 50, shortLink, {
             fontSize: '13px',
