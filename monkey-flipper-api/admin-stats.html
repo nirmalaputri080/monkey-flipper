@@ -371,16 +371,16 @@
         }
 
         async function refundTransaction(userId, payload) {
-            if (!confirm(\`Вернуть Stars пользователю \${userId}?\\nPayload: \${payload}\\n\\nЭто действие нельзя отменить.\`)) {
+            if (!confirm(`Вернуть Stars пользователю ${userId}?\nPayload: ${payload}\n\nЭто действие нельзя отменить.`)) {
                 return;
             }
             
             try {
-                const res = await fetch(\`\${API_URL}/api/admin/refund-by-payload\`, {
+                const res = await fetch(`${API_URL}/api/admin/refund-by-payload`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': \`Bearer \${adminToken}\`
+                        'Authorization': `Bearer ${adminToken}`
                     },
                     body: JSON.stringify({ userId, payload })
                 });
