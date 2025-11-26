@@ -212,10 +212,10 @@ const CONSTS = {
 };
 
 // ФИКС: DPI для четкого текста на Retina дисплеях
-const DPR = window.devicePixelRatio || 1;
+// Ограничиваем до 2, чтобы не было проблем на 3x экранах
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
 
 // ФИКС: Патчим Phaser.GameObjects.Text чтобы ВСЕ тексты были четкими
-const originalTextInit = Phaser.GameObjects.Text.prototype.initRTL;
 Phaser.GameObjects.Text.prototype.setResolution = function(value) {
     this.style.resolution = value;
     this.updateText();
@@ -225,7 +225,10 @@ Phaser.GameObjects.Text.prototype.setResolution = function(value) {
 // Переопределяем фабрику текста для автоматического resolution
 const originalTextFactory = Phaser.GameObjects.GameObjectFactory.prototype.text;
 Phaser.GameObjects.GameObjectFactory.prototype.text = function(x, y, text, style) {
-    const finalStyle = { ...style, resolution: DPR };
+    const finalStyle = { 
+        ...style, 
+        resolution: 2 // Фиксированное разрешение 2x для четкости
+    };
     return originalTextFactory.call(this, x, y, text, finalStyle);
 };
 
@@ -4514,31 +4517,29 @@ class InventoryScene extends Phaser.Scene {
 
 // Конфиг Phaser
 const config = {
-    type: Phaser.WEBGL,
+    type: Phaser.AUTO, // AUTO выберет лучший вариант (Canvas может быть четче для текста)
     width: CONSTS.WIDTH,
     height: CONSTS.HEIGHT,
     parent: 'game-container', // Контейнер для canvas
     scale: {
-        mode: Phaser.Scale.FIT, // FIT лучше для четкости чем RESIZE
+        mode: Phaser.Scale.FIT, // FIT лучше для четкости
         autoCenter: Phaser.Scale.CENTER_BOTH, // Центрируем
         width: CONSTS.WIDTH,
         height: CONSTS.HEIGHT
     },
-    // ФИКС: Настройки рендеринга для ЧЕТКОГО изображения на Retina
+    // ФИКС: Настройки рендеринга
     render: {
-        antialias: true, // Сглаживание для плавных линий
-        pixelArt: false, // Не пиксель-арт
-        roundPixels: false, // Не округляем пиксели
-        powerPreference: 'high-performance', // Максимальная производительность GPU
-        resolution: window.devicePixelRatio || 1 // КЛЮЧ! Учитываем плотность пикселей Retina
+        antialias: false, // ВЫКЛ сглаживание - делает текст четче!
+        pixelArt: false,
+        roundPixels: true, // Округляем пиксели для четкости текста
+        powerPreference: 'high-performance'
+        // Убрали resolution - он конфликтует с текстовым resolution
     },
     physics: {
         default: 'arcade',
         arcade: {
             gravity: { y: CONSTS.GRAVITY },
             debug: CONSTS.DEBUG_PHYSICS
-            // ФИКС: Убрали fps и fixedStep для поддержки 120Hz дисплеев
-            // Физика теперь адаптируется к частоте дисплея (60/120/144 Hz)
         },
     },
     scene: [MenuScene, LeaderboardScene, InventoryScene, MatchmakingScene, DuelHistoryScene, GameScene]
