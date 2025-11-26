@@ -1,42 +1,41 @@
 /**
  * НАСТОЯЩИЕ TELEGRAM STARS INTEGRATION
  * Документация: https://core.telegram.org/bots/payments-stars
+ * 
+ * Используем WEBHOOK вместо POLLING - более надёжно для production
  */
 
 require('dotenv').config(); // Загружаем переменные окружения
 const TelegramBot = require('node-telegram-bot-api');
 
 // Инициализация бота с токеном
-// polling включается автоматически если есть BOT_TOKEN (можно отключить через ENABLE_BOT_POLLING=false)
 const botToken = process.env.BOT_TOKEN || '';
-const enablePolling = process.env.ENABLE_BOT_POLLING !== 'false' && !!botToken;
+const webhookUrl = process.env.WEBHOOK_URL || 'https://monkey-flipper-djm1.onrender.com';
 
 console.log('🔍 Telegram Bot Config:', {
   hasToken: !!botToken,
   tokenPreview: botToken ? `${botToken.substring(0, 10)}...` : 'none',
-  enablePolling
+  mode: 'WEBHOOK',
+  webhookUrl: webhookUrl
 });
 
 let bot = null;
 
 if (botToken) {
-  bot = new TelegramBot(botToken, { polling: enablePolling });
+  // Создаём бота БЕЗ polling - будем использовать webhook
+  bot = new TelegramBot(botToken, { polling: false });
   
-  // Обработка ошибок polling
-  bot.on('polling_error', (error) => {
-    // Игнорируем ошибку конфликта (несколько инстансов)
-    if (error.code === 'ETELEGRAM' && error.message.includes('409 Conflict')) {
-      console.warn('⚠️ Bot polling conflict - another instance is running. This is normal during deploy.');
-    } else {
-      console.error('❌ Polling error:', error.message);
-    }
-  });
+  // Устанавливаем webhook при старте
+  const webhookPath = '/telegram-webhook';
+  const fullWebhookUrl = `${webhookUrl}${webhookPath}`;
   
-  // Graceful shutdown
-  process.on('SIGTERM', () => {
-    console.log('🛑 Stopping bot polling...');
-    bot.stopPolling();
-  });
+  bot.setWebHook(fullWebhookUrl)
+    .then(() => {
+      console.log(`✅ Webhook установлен: ${fullWebhookUrl}`);
+    })
+    .catch(err => {
+      console.error('❌ Ошибка установки webhook:', err.message);
+    });
 }
 
 /**
@@ -78,7 +77,8 @@ async function createStarsInvoice(userId, itemName, itemDescription, starsAmount
 }
 
 /**
- * Обработчик успешного платежа (webhook)
+ * Обработчик платежей через WEBHOOK
+ * Добавляет endpoint /telegram-webhook для приёма обновлений от Telegram
  */
 function setupPaymentHandler(server) {
     if (!bot) {
@@ -86,52 +86,76 @@ function setupPaymentHandler(server) {
         return;
     }
     
-    // Обработка pre_checkout_query (перед оплатой)
-    bot.on('pre_checkout_query', async (query) => {
-        console.log('💰 Pre-checkout:', query);
-        
-        // Подтверждаем возможность оплаты
-        await bot.answerPreCheckoutQuery(query.id, true);
-    });
-
-    // Обработка successful_payment (после успешной оплаты)
-    bot.on('successful_payment', async (msg) => {
-        const payment = msg.successful_payment;
-        const userId = msg.from.id;
-        
-        console.log(`✅ Оплата Stars успешна!`);
-        console.log(`   User: ${userId}`);
-        console.log(`   Amount: ${payment.total_amount} XTR`);
-        console.log(`   Payload: ${payment.invoice_payload}`);
-        console.log(`   Charge ID: ${payment.telegram_payment_charge_id}`);
-        
-        // Выдать товар пользователю в БД
+    // Webhook endpoint - Telegram будет слать сюда обновления
+    server.post('/telegram-webhook', async (req, res) => {
         try {
-            const item = await addItemToInventory(
-                userId, 
-                payment.invoice_payload, 
-                payment.total_amount,
-                payment.telegram_payment_charge_id // Сохраняем для возможности refund
-            );
+            const update = req.body;
             
-            // Отправить подтверждение
-            await bot.sendMessage(userId, 
-                `🎉 Покупка успешна!\n\n` +
-                `📦 ${item.name}\n` +
-                `💫 Оплачено: ${payment.total_amount} ⭐\n\n` +
-                `Товар добавлен в ваш инвентарь!`
-            );
+            console.log('📩 Webhook update received:', JSON.stringify(update).substring(0, 200));
+            
+            // Обработка pre_checkout_query
+            if (update.pre_checkout_query) {
+                const query = update.pre_checkout_query;
+                console.log('💰 Pre-checkout via webhook:', query);
+                
+                try {
+                    await bot.answerPreCheckoutQuery(query.id, true);
+                    console.log('✅ Pre-checkout confirmed');
+                } catch (err) {
+                    console.error('❌ Pre-checkout error:', err.message);
+                }
+            }
+            
+            // Обработка successful_payment (приходит внутри message)
+            if (update.message && update.message.successful_payment) {
+                const msg = update.message;
+                const payment = msg.successful_payment;
+                const userId = msg.from.id;
+                
+                console.log(`✅ Оплата Stars успешна (webhook)!`);
+                console.log(`   User: ${userId}`);
+                console.log(`   Amount: ${payment.total_amount} XTR`);
+                console.log(`   Payload: ${payment.invoice_payload}`);
+                console.log(`   Charge ID: ${payment.telegram_payment_charge_id}`);
+                
+                // Выдать товар пользователю в БД
+                try {
+                    const item = await addItemToInventory(
+                        userId, 
+                        payment.invoice_payload, 
+                        payment.total_amount,
+                        payment.telegram_payment_charge_id
+                    );
+                    
+                    // Отправить подтверждение
+                    await bot.sendMessage(userId, 
+                        `🎉 Покупка успешна!\n\n` +
+                        `📦 ${item.name}\n` +
+                        `💫 Оплачено: ${payment.total_amount} ⭐\n\n` +
+                        `Товар добавлен в ваш инвентарь!`
+                    );
+                    
+                } catch (error) {
+                    console.error('❌ Ошибка выдачи товара:', error);
+                    await bot.sendMessage(userId, 
+                        `⚠️ Оплата прошла, но возникла ошибка при выдаче товара.\n` +
+                        `Payload: ${payment.invoice_payload}\n` +
+                        `Сумма: ${payment.total_amount} XTR\n\n` +
+                        `Свяжитесь с поддержкой.`
+                    );
+                }
+            }
+            
+            // Всегда отвечаем 200 OK чтобы Telegram не пытался повторить
+            res.sendStatus(200);
             
         } catch (error) {
-            console.error('❌ Ошибка выдачи товара:', error);
-            await bot.sendMessage(userId, 
-                `⚠️ Оплата прошла, но возникла ошибка при выдаче товара.\n` +
-                `Payload: ${payment.invoice_payload}\n` +
-                `Сумма: ${payment.total_amount} XTR\n\n` +
-                `Свяжитесь с поддержкой.`
-            );
+            console.error('❌ Webhook processing error:', error);
+            res.sendStatus(200); // Всё равно отвечаем OK
         }
     });
+    
+    console.log('✅ Webhook handler registered at /telegram-webhook');
 }
 
 /**
