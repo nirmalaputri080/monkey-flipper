@@ -3792,14 +3792,34 @@ app.get('/api/admin/stars-transactions', validateAdmin, async (req, res) => {
   try {
     const transactions = await telegramStars.getStarsTransactions();
     
-    // Получаем список возвращённых транзакций из БД
-    const refundedResult = await pool.query(
-      `SELECT transaction_id FROM refunded_stars WHERE transaction_id IS NOT NULL`
+    // Фильтруем только ВХОДЯЩИЕ платежи (от пользователей)
+    // Исходящие (refunds) имеют receiver вместо source
+    const incomingTransactions = transactions.filter(tx => 
+      tx.source && tx.source.type === 'user' && tx.source.user
     );
-    const refundedIds = new Set(refundedResult.rows.map(r => r.transaction_id));
+    
+    // Получаем список возвращённых транзакций из БД
+    let refundedIds = new Set();
+    try {
+      const refundedResult = await pool.query(
+        `SELECT transaction_id FROM refunded_stars WHERE transaction_id IS NOT NULL`
+      );
+      refundedIds = new Set(refundedResult.rows.map(r => r.transaction_id));
+    } catch (e) {
+      // Таблица может не существовать
+      console.log('refunded_stars table not found, creating...');
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS refunded_stars (
+          id SERIAL PRIMARY KEY,
+          transaction_id TEXT NOT NULL UNIQUE,
+          user_id VARCHAR(255) NOT NULL,
+          refunded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+    }
     
     let totalStars = 0;
-    const txList = transactions.map(tx => {
+    const txList = incomingTransactions.map(tx => {
       const isRefunded = refundedIds.has(tx.id);
       if (!isRefunded) {
         totalStars += tx.amount;
