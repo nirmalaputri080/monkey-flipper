@@ -22,12 +22,12 @@ const bot = botToken
   : null;
 
 /**
- * Создать инвойс для оплаты Telegram Stars
+ * Создать инвойс для оплаты Telegram Stars (для WebApp)
  * @param {number} userId - Telegram User ID
  * @param {string} itemName - Название товара
  * @param {string} itemDescription - Описание
  * @param {number} starsAmount - Сумма в Stars (XTR)
- * @returns {Promise<string>} - Invoice URL
+ * @returns {Promise<string>} - Invoice Link URL
  */
 async function createStarsInvoice(userId, itemName, itemDescription, starsAmount) {
     if (!bot) {
@@ -35,26 +35,19 @@ async function createStarsInvoice(userId, itemName, itemDescription, starsAmount
     }
     
     try {
-        // Создаем инвойс для оплаты Stars
-        const invoice = await bot.sendInvoice(
-            userId,
+        // Создаем ССЫЛКУ на инвойс (не отправляем сообщение!)
+        // Это правильный способ для WebApp/Mini App
+        const invoiceLink = await bot.createInvoiceLink(
             itemName,                    // title
             itemDescription,             // description
-            `purchase_${Date.now()}`,    // payload (уникальный ID)
+            `purchase_${userId}_${Date.now()}`, // payload (с userId для идентификации)
             '',                          // provider_token (пусто для Stars)
             'XTR',                       // currency (Telegram Stars)
-            [{ label: itemName, amount: starsAmount }], // prices (1 Star = 1 unit)
-            {
-                need_name: false,
-                need_phone_number: false,
-                need_email: false,
-                need_shipping_address: false,
-                is_flexible: false
-            }
+            [{ label: itemName, amount: starsAmount }] // prices
         );
 
-        console.log(`✅ Инвойс создан: ${starsAmount} Stars для товара "${itemName}"`);
-        return invoice;
+        console.log(`✅ Инвойс-ссылка создана: ${starsAmount} Stars для "${itemName}", user: ${userId}`);
+        return invoiceLink;
 
     } catch (error) {
         console.error('❌ Ошибка создания инвойса:', error);

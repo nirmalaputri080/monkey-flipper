@@ -731,25 +731,59 @@
                         await handleTonPayment(data.transaction, data.transactionId, data.item, modalContent);
                         return;
                     } else if (data.invoice) {
-                        // Telegram Stars (XTR) - показываем инвойс
+                        // Telegram Stars (XTR) - открываем инвойс через WebApp API
                         if (tg?.HapticFeedback) {
-                            tg.HapticFeedback.notificationOccurred('success');
+                            tg.HapticFeedback.impactOccurred('medium');
                         }
                         
                         modalContent.innerHTML = `
                             <div style="text-align: center; padding: 30px;">
-                                <div style="font-size: 64px; margin-bottom: 20px;">✅</div>
-                                <h2>Инвойс создан!</h2>
-                                <p style="margin: 15px 0;">Платеж будет обработан через Telegram Stars</p>
-                                <p style="font-size: 20px; font-weight: bold; color: #FFD700;">⭐ ${selectedItem.priceXTR} XTR</p>
-                                <button class="modal-button buy" onclick="closeModal()" style="margin-top: 20px; width: 100%;">Понятно</button>
+                                <div style="font-size: 64px; margin-bottom: 20px;">⏳</div>
+                                <h2>Открываем оплату...</h2>
+                                <p style="margin: 15px 0;">Подтвердите оплату ${selectedItem.priceXTR} ⭐</p>
                             </div>
                         `;
                         
-                        // Перезагружаем покупки через 2 секунды
-                        setTimeout(() => {
-                            loadPurchases();
-                        }, 2000);
+                        // Открываем инвойс через Telegram WebApp API
+                        if (tg?.openInvoice) {
+                            tg.openInvoice(data.invoice, async (status) => {
+                                console.log('Invoice status:', status);
+                                
+                                if (status === 'paid') {
+                                    // Успешная оплата!
+                                    if (tg?.HapticFeedback) {
+                                        tg.HapticFeedback.notificationOccurred('success');
+                                    }
+                                    
+                                    modalContent.innerHTML = `
+                                        <div style="text-align: center; padding: 30px;">
+                                            <div style="font-size: 64px; margin-bottom: 20px;">🎉</div>
+                                            <h2>Покупка успешна!</h2>
+                                            <p style="margin: 15px 0;">${selectedItem.name}</p>
+                                            <p style="opacity: 0.8;">Оплачено: ${selectedItem.priceXTR} ⭐</p>
+                                            <button class="modal-button buy" onclick="closeModal(); loadPurchases(); loadBalance();" style="margin-top: 20px; width: 100%;">Отлично!</button>
+                                        </div>
+                                    `;
+                                } else if (status === 'cancelled') {
+                                    closeModal();
+                                } else {
+                                    // pending или failed
+                                    modalContent.innerHTML = `
+                                        <div style="text-align: center; padding: 30px;">
+                                            <div style="font-size: 64px; margin-bottom: 20px;">⚠️</div>
+                                            <h2>Оплата не завершена</h2>
+                                            <p style="margin: 15px 0;">Статус: ${status}</p>
+                                            <button class="modal-button cancel" onclick="closeModal()" style="margin-top: 20px; width: 100%;">Закрыть</button>
+                                        </div>
+                                    `;
+                                }
+                            });
+                        } else {
+                            // Fallback если openInvoice недоступен
+                            window.open(data.invoice, '_blank');
+                            closeModal();
+                        }
+                        return;
                     } else {
                         // Обычная покупка за Coins/STARS - УСПЕХ!
                         if (tg?.HapticFeedback) {
