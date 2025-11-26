@@ -85,10 +85,16 @@ function setupPaymentHandler(server) {
         console.log(`   User: ${userId}`);
         console.log(`   Amount: ${payment.total_amount} XTR`);
         console.log(`   Payload: ${payment.invoice_payload}`);
+        console.log(`   Charge ID: ${payment.telegram_payment_charge_id}`);
         
         // Выдать товар пользователю в БД
         try {
-            const item = await addItemToInventory(userId, payment.invoice_payload, payment.total_amount);
+            const item = await addItemToInventory(
+                userId, 
+                payment.invoice_payload, 
+                payment.total_amount,
+                payment.telegram_payment_charge_id // Сохраняем для возможности refund
+            );
             
             // Отправить подтверждение
             await bot.sendMessage(userId, 
@@ -113,7 +119,7 @@ function setupPaymentHandler(server) {
 /**
  * Выдать товар пользователю после оплаты Stars
  */
-async function addItemToInventory(userId, payload, amount) {
+async function addItemToInventory(userId, payload, amount, chargeId = null) {
     const { Pool } = require('pg');
     const pool = new Pool({ connectionString: process.env.DATABASE_URL });
     const fs = require('fs');
@@ -122,7 +128,7 @@ async function addItemToInventory(userId, payload, amount) {
     try {
         // payload имеет формат: purchase_USERID_TIMESTAMP
         // Нам нужно найти какой товар был куплен по цене
-        console.log(`🔍 Processing payment: userId=${userId}, payload=${payload}, amount=${amount}`);
+        console.log(`🔍 Processing payment: userId=${userId}, payload=${payload}, amount=${amount}, chargeId=${chargeId}`);
         
         // Загружаем товары чтобы найти по цене
         const shopItems = JSON.parse(fs.readFileSync('./shop-items.json', 'utf8'));
@@ -138,11 +144,11 @@ async function addItemToInventory(userId, payload, amount) {
         
         const purchaseId = crypto.randomUUID();
         
-        // Добавляем покупку в БД
+        // Добавляем покупку в БД (с charge_id для возможности refund)
         await pool.query(`
-            INSERT INTO purchases (id, user_id, item_id, item_name, price, currency, status, purchased_at)
-            VALUES ($1, $2, $3, $4, $5, 'XTR', 'active', NOW())
-        `, [purchaseId, userId, item.id, item.name, amount]);
+            INSERT INTO purchases (id, user_id, item_id, item_name, price, currency, status, purchased_at, nonce)
+            VALUES ($1, $2, $3, $4, $5, 'XTR', 'active', NOW(), $6)
+        `, [purchaseId, userId, item.id, item.name, amount, chargeId]);
         
         console.log(`✅ Товар "${item.name}" (${item.id}) добавлен пользователю ${userId}`);
         
@@ -197,18 +203,25 @@ async function getStarsTransactions() {
 }
 
 /**
- * Вывести Stars с баланса бота (опционально)
+ * Сделать возврат Stars пользователю
+ * @param {number} userId - Telegram User ID
+ * @param {string} telegramPaymentChargeId - ID транзакции из successful_payment
  */
-async function withdrawStars(recipientUserId, amount) {
+async function refundStarsPayment(userId, telegramPaymentChargeId) {
+    if (!bot) {
+        throw new Error('Telegram Bot не инициализирован');
+    }
+    
     try {
-        // Отправка Stars пользователю
-        const result = await bot.refundStarPayment(recipientUserId, amount);
+        console.log(`💸 Возврат Stars: user=${userId}, chargeId=${telegramPaymentChargeId}`);
         
-        console.log(`✅ Отправлено ${amount} Stars пользователю ${recipientUserId}`);
-        return result;
+        await bot.refundStarPayment(userId, telegramPaymentChargeId);
+        
+        console.log(`✅ Возврат Stars успешен для пользователя ${userId}`);
+        return true;
         
     } catch (error) {
-        console.error('❌ Ошибка вывода Stars:', error);
+        console.error('❌ Ошибка возврата Stars:', error);
         throw error;
     }
 }
@@ -310,7 +323,7 @@ module.exports = {
     addItemToInventory,
     getStarsBalance,
     getStarsTransactions,
-    withdrawStars,
+    refundStarsPayment,
     showIntroVideo,
     showIntroAnimation,
     bot

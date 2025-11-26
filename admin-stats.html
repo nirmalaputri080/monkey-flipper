@@ -225,8 +225,8 @@
             </div>
 
             <div class="section">
-                <h2>⭐ Транзакции Stars</h2>
-                <div id="starsTransactions">
+                <h2>⭐ Покупки за Stars (с возвратом)</h2>
+                <div id="starsPurchases">
                     <div class="loading">Загрузка...</div>
                 </div>
             </div>
@@ -298,8 +298,17 @@
                 const starsData = await starsRes.json();
                 
                 if (starsData.success) {
-                    renderStarsTransactions(starsData.transactions);
                     document.getElementById('starsBalance').textContent = starsData.totalStars + ' ⭐';
+                }
+
+                // Загружаем покупки Stars с возможностью возврата
+                const starsPurchasesRes = await fetch(`${API_URL}/api/admin/stars-purchases`, {
+                    headers: { 'Authorization': `Bearer ${adminToken}` }
+                });
+                const starsPurchasesData = await starsPurchasesRes.json();
+                
+                if (starsPurchasesData.success) {
+                    renderStarsPurchases(starsPurchasesData.purchases);
                 }
 
                 // Загружаем статистику покупок
@@ -321,23 +330,54 @@
             }
         }
 
-        function renderStarsTransactions(transactions) {
-            const container = document.getElementById('starsTransactions');
+        function renderStarsPurchases(purchases) {
+            const container = document.getElementById('starsPurchases');
             
-            if (!transactions || transactions.length === 0) {
-                container.innerHTML = '<div class="loading">Нет транзакций</div>';
+            if (!purchases || purchases.length === 0) {
+                container.innerHTML = '<div class="loading">Нет покупок за Stars</div>';
                 return;
             }
 
-            container.innerHTML = transactions.map(tx => `
+            container.innerHTML = purchases.map(p => `
                 <div class="transaction">
                     <div class="user">
-                        <span class="username">${tx.user?.first_name || 'Unknown'} ${tx.user?.last_name || ''}</span>
-                        <span class="date">@${tx.user?.username || 'no_username'} • ${formatDate(tx.date)}</span>
+                        <span class="username">${p.item_name}</span>
+                        <span class="date">User ${p.user_id} • ${formatDate(p.purchased_at)} • ${p.status === 'refunded' ? '🔄 Возвращено' : '✅ Активно'}</span>
                     </div>
-                    <div class="amount">+${tx.amount} ⭐</div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div class="amount" style="color: #FFD700;">${p.price} ⭐</div>
+                        ${p.can_refund ? `<button onclick="refundPurchase('${p.id}', ${p.user_id})" style="padding: 5px 10px; background: #ff6b6b; border: none; border-radius: 5px; color: white; cursor: pointer; font-size: 12px;">↩️ Вернуть</button>` : ''}
+                    </div>
                 </div>
             `).join('');
+        }
+
+        async function refundPurchase(purchaseId, userId) {
+            if (!confirm('Вы уверены что хотите вернуть Stars? Это действие нельзя отменить.')) {
+                return;
+            }
+            
+            try {
+                const res = await fetch(`${API_URL}/api/admin/refund-stars`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${adminToken}`
+                    },
+                    body: JSON.stringify({ purchaseId, userId })
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    alert('✅ ' + data.message);
+                    loadStats(); // Обновляем данные
+                } else {
+                    alert('❌ Ошибка: ' + data.error);
+                }
+            } catch (err) {
+                alert('❌ Ошибка: ' + err.message);
+            }
         }
 
         function renderTonTransactions(transactions) {

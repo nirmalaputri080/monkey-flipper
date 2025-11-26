@@ -3848,6 +3848,77 @@ app.get('/api/admin/purchases-stats', validateAdmin, async (req, res) => {
   }
 });
 
+// Возврат Stars пользователю
+app.post('/api/admin/refund-stars', validateAdmin, async (req, res) => {
+  const { userId, purchaseId } = req.body;
+  
+  if (!userId || !purchaseId) {
+    return res.status(400).json({ success: false, error: 'userId and purchaseId required' });
+  }
+  
+  try {
+    // Находим покупку с charge_id
+    const purchaseRes = await pool.query(`
+      SELECT id, user_id, item_name, price, nonce as charge_id, status
+      FROM purchases 
+      WHERE id = $1 AND currency = 'XTR'
+    `, [purchaseId]);
+    
+    if (purchaseRes.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Purchase not found' });
+    }
+    
+    const purchase = purchaseRes.rows[0];
+    
+    if (purchase.status === 'refunded') {
+      return res.status(400).json({ success: false, error: 'Already refunded' });
+    }
+    
+    if (!purchase.charge_id) {
+      return res.status(400).json({ success: false, error: 'No charge_id - refund not possible for old purchases' });
+    }
+    
+    // Делаем возврат через Telegram API
+    await telegramStars.refundStarsPayment(parseInt(purchase.user_id), purchase.charge_id);
+    
+    // Помечаем покупку как возвращённую
+    await pool.query(`
+      UPDATE purchases SET status = 'refunded' WHERE id = $1
+    `, [purchaseId]);
+    
+    console.log(`✅ Refund successful: ${purchase.item_name} for user ${purchase.user_id}`);
+    
+    res.json({ 
+      success: true, 
+      message: `Возврат ${purchase.price} ⭐ за "${purchase.item_name}" выполнен` 
+    });
+    
+  } catch (err) {
+    console.error('Refund error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Получить покупки Stars с возможностью возврата
+app.get('/api/admin/stars-purchases', validateAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, user_id, item_id, item_name, price, status, purchased_at, 
+             nonce as charge_id,
+             CASE WHEN nonce IS NOT NULL AND status != 'refunded' THEN true ELSE false END as can_refund
+      FROM purchases 
+      WHERE currency = 'XTR'
+      ORDER BY purchased_at DESC 
+      LIMIT 50
+    `);
+    
+    res.json({ success: true, purchases: result.rows });
+  } catch (err) {
+    console.error('Stars purchases error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ==================== END ADMIN API ====================
 
 app.listen(PORT, () => {
