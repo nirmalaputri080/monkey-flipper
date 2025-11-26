@@ -2530,13 +2530,14 @@ app.post('/api/shop/create-ton-transaction', validateShopAuth, async (req, res) 
     }
     
     // Создаем уникальный ID транзакции
+    const txUuid = crypto.randomUUID();
     const transactionId = `ton_${userId}_${itemId}_${Date.now()}`;
     
     // Сохраняем pending транзакцию в БД
     await pool.query(`
       INSERT INTO transactions (id, user_id, type, amount, currency, status, nonce, created_at)
       VALUES ($1, $2, 'ton_purchase', $3, 'TON', 'pending', $4, NOW())
-    `, [transactionId, userId, item.priceTON, transactionId]);
+    `, [txUuid, userId, item.priceTON, transactionId]);
     
     // Формируем данные для TON Connect транзакции
     const amountNano = Math.floor(item.priceTON * 1e9); // TON в nanoTON
@@ -2552,12 +2553,13 @@ app.post('/api/shop/create-ton-transaction', validateShopAuth, async (req, res) 
       ]
     };
     
-    console.log(`✅ TON транзакция создана: ${item.name} за ${item.priceTON} TON`);
+    console.log(`✅ TON транзакция создана: ${item.name} за ${item.priceTON} TON, txId: ${txUuid}`);
     
     res.json({
       success: true,
       transaction,
       transactionId,
+      txUuid,
       item: {
         id: item.id,
         name: item.name,
@@ -2590,9 +2592,9 @@ app.post('/api/shop/confirm-ton-payment', validateShopAuth, async (req, res) => 
       });
     }
     
-    // Находим pending транзакцию
+    // Находим pending транзакцию по nonce (там хранится transactionId)
     const txResult = await pool.query(
-      'SELECT * FROM transactions WHERE id = $1 AND user_id = $2 AND status = $3',
+      'SELECT * FROM transactions WHERE nonce = $1 AND user_id = $2 AND status = $3',
       [transactionId, userId, 'pending']
     );
     
@@ -2624,7 +2626,7 @@ app.post('/api/shop/confirm-ton-payment', validateShopAuth, async (req, res) => 
     // Обновляем транзакцию как completed
     await pool.query(
       'UPDATE transactions SET status = $1, updated_at = NOW() WHERE id = $2',
-      ['completed', transactionId]
+      ['completed', tx.id]
     );
     
     // Создаем запись о покупке
