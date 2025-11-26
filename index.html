@@ -153,7 +153,7 @@
 <body>
     <!-- 🎬 INTRO VIDEO OVERLAY -->
     <div id="intro-video-overlay">
-        <video id="intro-video" playsinline autoplay muted>
+        <video id="intro-video" playsinline muted preload="auto">
             <source src="./assets/intro.mp4" type="video/mp4">
         </video>
         <div id="skip-intro-hint">👆 Нажмите чтобы пропустить</div>
@@ -170,12 +170,13 @@
             function hideIntro() {
                 overlay.classList.add('hidden');
                 video.pause();
+                video.src = ''; // Освобождаем память
                 console.log('🎮 Intro пропущено, запуск игры');
             }
             
             // Пропустить по клику в любом месте
             overlay.addEventListener('click', hideIntro);
-            overlay.addEventListener('touchstart', hideIntro);
+            overlay.addEventListener('touchstart', hideIntro, { passive: true });
             
             // Автоматически скрыть после окончания видео
             video.addEventListener('ended', hideIntro);
@@ -186,13 +187,44 @@
                 hideIntro();
             });
             
+            // ФИКС: Принудительный запуск видео
+            function tryPlayVideo() {
+                console.log('▶️ Попытка запустить видео');
+                const playPromise = video.play();
+                
+                if (playPromise !== undefined) {
+                    playPromise.then(function() {
+                        console.log('✅ Видео воспроизводится');
+                    }).catch(function(error) {
+                        console.warn('⚠️ Автовоспроизведение заблокировано:', error.name);
+                        // Видео запустится при первом клике
+                    });
+                }
+            }
+            
+            // Пытаемся запустить при загрузке
+            video.addEventListener('loadeddata', function() {
+                console.log('📼 Видео загружено');
+                tryPlayVideo();
+            });
+            
+            // Запускаем при любом взаимодействии если не играет
+            overlay.addEventListener('touchstart', function() {
+                if (video.paused) {
+                    tryPlayVideo();
+                }
+            }, { once: true, passive: true });
+            
             // Таймаут на случай зависания видео
             setTimeout(function() {
                 if (!overlay.classList.contains('hidden')) {
-                    console.log('⏱️ Таймаут intro video');
+                    console.log('⏱️ Таймаут intro video (10 сек)');
                     hideIntro();
                 }
-            }, 20000); // 20 секунд максимум
+            }, 10000); // 10 секунд максимум
+            
+            // Немедленная попытка запуска (на случай если loadeddata уже произошло)
+            setTimeout(tryPlayVideo, 100);
         })();
     </script>
 </body>
