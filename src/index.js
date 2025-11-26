@@ -26,7 +26,7 @@ class SeededRandom {
 // Socket.IO сервер (Render) - для 1v1 матчмейкинга
 const SOCKET_SERVER_URL = window.location.hostname === 'localhost' 
     ? 'http://localhost:3000'  // Для локальной разработки
-    : 'https://monkey-flipper-1v1-server.onrender.com';
+    : 'https://monkey-flipper-1v1.onrender.com';
 
 // API сервер (Render) - для сохранения счетов и лидерборда
 const API_SERVER_URL = window.location.hostname === 'localhost'
