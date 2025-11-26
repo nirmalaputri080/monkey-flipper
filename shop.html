@@ -873,6 +873,8 @@
         
         // Отправка TON транзакции
         async function sendTonTransaction(transaction, transactionId, item, modalContent) {
+            console.log('📤 Sending TON transaction:', JSON.stringify(transaction, null, 2));
+            
             modalContent.innerHTML = `
                 <div style="text-align: center; padding: 30px;">
                     <div style="font-size: 64px; margin-bottom: 20px;">⏳</div>
@@ -882,6 +884,7 @@
             `;
 
             try {
+                console.log('📤 Calling tonConnectUI.sendTransaction...');
                 const result = await tonConnectUI.sendTransaction(transaction);
                 console.log('TON Transaction result:', result);
 

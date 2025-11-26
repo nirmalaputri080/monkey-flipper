@@ -2540,20 +2540,20 @@ app.post('/api/shop/create-ton-transaction', validateShopAuth, async (req, res) 
     `, [txUuid, userId, item.priceTON, transactionId]);
     
     // Формируем данные для TON Connect транзакции
-    const amountNano = Math.floor(item.priceTON * 1e9); // TON в nanoTON
+    const amountNano = Math.floor(item.priceTON * 1e9).toString(); // TON в nanoTON (строка)
     
     const transaction = {
       validUntil: Math.floor(Date.now() / 1000) + 600, // 10 минут на оплату
       messages: [
         {
           address: TON_WALLET_ADDRESS,
-          amount: amountNano.toString()
-          // Не используем payload - transactionId храним в БД
+          amount: amountNano
         }
       ]
     };
     
-    console.log(`✅ TON транзакция создана: ${item.name} за ${item.priceTON} TON, txId: ${txUuid}`);
+    console.log(`✅ TON транзакция создана:`, JSON.stringify(transaction));
+    console.log(`   Item: ${item.name}, Price: ${item.priceTON} TON, Wallet: ${TON_WALLET_ADDRESS}`);
     
     res.json({
       success: true,
