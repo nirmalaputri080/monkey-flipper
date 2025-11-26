@@ -2490,6 +2490,172 @@ app.post('/api/shop/create-stars-invoice', validateShopAuth, async (req, res) =>
   }
 });
 
+// ==================== TON PAYMENT ====================
+
+// Адрес кошелька для приема TON платежей (настройте в .env)
+const TON_WALLET_ADDRESS = process.env.TON_WALLET_ADDRESS || 'UQD-example-wallet-address';
+
+/**
+ * Создать данные для TON транзакции
+ * POST /api/shop/create-ton-transaction
+ */
+app.post('/api/shop/create-ton-transaction', validateShopAuth, async (req, res) => {
+  try {
+    const { userId, itemId } = req.body;
+    
+    if (!userId || !itemId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'userId и itemId обязательны' 
+      });
+    }
+    
+    // Загружаем товар
+    const shopItems = JSON.parse(fs.readFileSync('./shop-items.json', 'utf8'));
+    const allItems = [...shopItems.skins, ...shopItems.nft_characters, ...shopItems.boosts];
+    const item = allItems.find(i => i.id === itemId);
+    
+    if (!item) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Товар не найден' 
+      });
+    }
+    
+    if (!item.priceTON) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Этот товар нельзя купить за TON' 
+      });
+    }
+    
+    // Создаем уникальный ID транзакции
+    const transactionId = `ton_${userId}_${itemId}_${Date.now()}`;
+    
+    // Сохраняем pending транзакцию в БД
+    await pool.query(`
+      INSERT INTO transactions (id, user_id, type, amount, currency, status, nonce, created_at)
+      VALUES ($1, $2, 'ton_purchase', $3, 'TON', 'pending', $4, NOW())
+    `, [transactionId, userId, item.priceTON, transactionId]);
+    
+    // Формируем данные для TON Connect транзакции
+    const amountNano = Math.floor(item.priceTON * 1e9); // TON в nanoTON
+    
+    const transaction = {
+      validUntil: Math.floor(Date.now() / 1000) + 600, // 10 минут на оплату
+      messages: [
+        {
+          address: TON_WALLET_ADDRESS,
+          amount: amountNano.toString(),
+          payload: Buffer.from(transactionId).toString('base64') // ID транзакции в payload
+        }
+      ]
+    };
+    
+    console.log(`✅ TON транзакция создана: ${item.name} за ${item.priceTON} TON`);
+    
+    res.json({
+      success: true,
+      transaction,
+      transactionId,
+      item: {
+        id: item.id,
+        name: item.name,
+        price: item.priceTON,
+        currency: 'TON'
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Ошибка создания TON транзакции:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+/**
+ * Подтвердить TON платеж (вызывается после успешной транзакции)
+ * POST /api/shop/confirm-ton-payment
+ */
+app.post('/api/shop/confirm-ton-payment', validateShopAuth, async (req, res) => {
+  try {
+    const { userId, transactionId, txHash } = req.body;
+    
+    if (!userId || !transactionId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'userId и transactionId обязательны' 
+      });
+    }
+    
+    // Находим pending транзакцию
+    const txResult = await pool.query(
+      'SELECT * FROM transactions WHERE id = $1 AND user_id = $2 AND status = $3',
+      [transactionId, userId, 'pending']
+    );
+    
+    if (txResult.rows.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Транзакция не найдена или уже обработана' 
+      });
+    }
+    
+    const tx = txResult.rows[0];
+    
+    // Извлекаем itemId из transactionId (формат: ton_userId_itemId_timestamp)
+    const parts = transactionId.split('_');
+    const itemId = parts[2];
+    
+    // Загружаем товар
+    const shopItems = JSON.parse(fs.readFileSync('./shop-items.json', 'utf8'));
+    const allItems = [...shopItems.skins, ...shopItems.nft_characters, ...shopItems.boosts];
+    const item = allItems.find(i => i.id === itemId);
+    
+    if (!item) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Товар не найден' 
+      });
+    }
+    
+    // Обновляем транзакцию как completed
+    await pool.query(
+      'UPDATE transactions SET status = $1, updated_at = NOW() WHERE id = $2',
+      ['completed', transactionId]
+    );
+    
+    // Создаем запись о покупке
+    const purchaseId = crypto.randomUUID();
+    await pool.query(`
+      INSERT INTO purchases (id, user_id, item_id, item_name, price, currency, status, purchased_at)
+      VALUES ($1, $2, $3, $4, $5, 'TON', 'active', NOW())
+    `, [purchaseId, userId, itemId, item.name, tx.amount]);
+    
+    console.log(`✅ TON покупка подтверждена: user ${userId}, item ${itemId}, txHash: ${txHash || 'N/A'}`);
+    
+    res.json({
+      success: true,
+      purchase: {
+        id: purchaseId,
+        itemId,
+        itemName: item.name,
+        price: tx.amount,
+        currency: 'TON'
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Ошибка подтверждения TON платежа:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 /**
  * Проверка баланса Telegram Stars бота
  */

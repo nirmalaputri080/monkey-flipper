@@ -351,6 +351,10 @@
                         <span><span class="icon">⭐</span> Telegram Stars</span>
                         <span class="price" id="priceXTR">0</span>
                     </button>
+                    <button class="payment-button" id="payTON" onclick="selectPayment('ton')" style="display: none;">
+                        <span><span class="icon">💎</span> TON</span>
+                        <span class="price" id="priceTON">0</span>
+                    </button>
                 </div>
                 <button class="modal-button cancel" onclick="closeModal()" style="margin-top: 15px; width: 100%;">Отмена</button>
             </div>
@@ -531,15 +535,18 @@
                     // Если куплено - показываем статус
                     priceHtml = `<div class="price" style="background: #4CAF50; color: white; font-weight: bold;">✅ КУПЛЕНО</div>`;
                 } else {
-                    // Показываем варианты оплаты: Coins и Telegram Stars
-                    if (item.currency === 'both' || item.priceXTR) {
+                    // Показываем варианты оплаты: Coins, Telegram Stars, TON
+                    if (item.currency === 'both' || item.priceXTR || item.priceTON) {
                         priceHtml = `
-                            <div class="price coins" style="margin-bottom: 5px">
-                                🪙 ${item.priceCoins || 0} Coins
+                            <div class="price coins" style="margin-bottom: 4px; font-size: 12px;">
+                                🪙 ${item.priceCoins || 0}
                             </div>
-                            <div class="price" style="background: linear-gradient(135deg, #667eea, #764ba2); color: #fff">
-                                ⭐ ${item.priceXTR || 0} Stars
+                            <div class="price" style="background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; margin-bottom: 4px; font-size: 12px;">
+                                ⭐ ${item.priceXTR || 0}
                             </div>
+                            ${item.priceTON ? `<div class="price" style="background: linear-gradient(135deg, #0088cc, #00d4aa); color: #fff; font-size: 12px;">
+                                💎 ${item.priceTON} TON
+                            </div>` : ''}
                         `;
                     } else if (item.currency === 'coins') {
                         priceHtml = `<div class="price coins">🪙 ${item.priceCoins}</div>`;
@@ -588,7 +595,7 @@
                 document.getElementById('singlePaymentSection').style.display = 'none';
                 document.getElementById('multiPaymentSection').style.display = 'block';
                 
-                // Настраиваем кнопки оплаты: только Coins и Telegram Stars
+                // Настраиваем кнопки оплаты: Coins, Telegram Stars, TON
                 if (selectedItem.priceCoins) {
                     document.getElementById('payCoins').style.display = 'flex';
                     document.getElementById('priceCoins').textContent = `${selectedItem.priceCoins} 🪙`;
@@ -596,6 +603,10 @@
                 if (selectedItem.priceXTR) {
                     document.getElementById('payXTR').style.display = 'flex';
                     document.getElementById('priceXTR').textContent = `${selectedItem.priceXTR} ⭐`;
+                }
+                if (selectedItem.priceTON) {
+                    document.getElementById('payTON').style.display = 'flex';
+                    document.getElementById('priceTON').textContent = `${selectedItem.priceTON} 💎`;
                 }
             } else {
                 // Один способ - показываем обычную кнопку покупки
@@ -609,8 +620,10 @@
                 } else if (selectedItem.currency === 'xtr') {
                     priceText = `⭐ <strong>${selectedItem.priceXTR} Telegram Stars</strong>`;
                     selectedPaymentMethod = 'xtr';
+                } else if (selectedItem.currency === 'ton') {
+                    priceText = `💎 <strong>${selectedItem.priceTON} TON</strong>`;
+                    selectedPaymentMethod = 'ton';
                 } else {
-                    priceText = `💰 <strong>${selectedItem.priceStars || selectedItem.price} STARS</strong>`;
                     selectedPaymentMethod = 'stars';
                 }
                 
@@ -641,9 +654,11 @@
             // Скрываем кнопки оплаты
             document.getElementById('payCoins').style.display = 'none';
             document.getElementById('payXTR').style.display = 'none';
+            document.getElementById('payTON').style.display = 'none';
         }
         
         let selectedPaymentMethod = null;
+        let tonConnectUI = null; // TON Connect UI instance
 
         // Подтверждение покупки
         async function confirmBuy() {
@@ -678,6 +693,13 @@
                         userId: userId,
                         itemId: selectedItem.id
                     };
+                } else if (selectedPaymentMethod === 'ton') {
+                    // Покупка за TON - создаем транзакцию
+                    endpoint = '/api/shop/create-ton-transaction';
+                    body = {
+                        userId: userId,
+                        itemId: selectedItem.id
+                    };
                 } else {
                     // Покупка за Monkey Coins
                     endpoint = '/api/shop/purchase';
@@ -702,7 +724,11 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    if (data.invoice) {
+                    if (data.transaction) {
+                        // TON транзакция - открываем TON Connect для оплаты
+                        await handleTonPayment(data.transaction, data.transactionId, data.item, modalContent);
+                        return;
+                    } else if (data.invoice) {
                         // Telegram Stars (XTR) - показываем инвойс
                         if (tg?.HapticFeedback) {
                             tg.HapticFeedback.notificationOccurred('success');
@@ -785,6 +811,135 @@
             });
         }
 
+        // Обработка TON платежа
+        async function handleTonPayment(transaction, transactionId, item, modalContent) {
+            try {
+                // Проверяем наличие TON Connect UI
+                if (typeof window.TonConnectUI === 'undefined') {
+                    // TON Connect не загружен - показываем инструкцию
+                    modalContent.innerHTML = `
+                        <div style="text-align: center; padding: 30px;">
+                            <div style="font-size: 64px; margin-bottom: 20px;">💎</div>
+                            <h2>Оплата TON</h2>
+                            <p style="margin: 15px 0;">Для оплаты через TON:</p>
+                            <p style="font-size: 14px; opacity: 0.8;">1. Откройте кошелёк (Tonkeeper, TON Space)</p>
+                            <p style="font-size: 14px; opacity: 0.8;">2. Отправьте <strong>${item.price} TON</strong></p>
+                            <p style="font-size: 12px; opacity: 0.6; word-break: break-all; margin-top: 10px;">
+                                На адрес: ${transaction.messages[0].address}
+                            </p>
+                            <p style="font-size: 12px; opacity: 0.6; margin-top: 10px;">
+                                ID транзакции: ${transactionId}
+                            </p>
+                            <button class="modal-button buy" onclick="closeModal()" style="margin-top: 20px; width: 100%;">Понятно</button>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Инициализируем TON Connect если ещё не сделано
+                if (!tonConnectUI) {
+                    tonConnectUI = new window.TonConnectUI({
+                        manifestUrl: 'https://monkey-flipper-djm1.onrender.com/tonconnect-manifest.json',
+                        buttonRootId: null
+                    });
+                }
+
+                // Проверяем подключён ли кошелёк
+                if (!tonConnectUI.wallet) {
+                    modalContent.innerHTML = `
+                        <div style="text-align: center; padding: 30px;">
+                            <div style="font-size: 64px; margin-bottom: 20px;">💎</div>
+                            <h2>Подключите кошелёк</h2>
+                            <p style="margin: 15px 0;">Для оплаты TON нужно сначала подключить кошелёк</p>
+                            <button class="modal-button buy" onclick="connectTonWallet()" style="margin-top: 15px; width: 100%;">🔗 Подключить кошелёк</button>
+                            <button class="modal-button cancel" onclick="closeModal()" style="margin-top: 10px; width: 100%;">Отмена</button>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Отправляем транзакцию
+                modalContent.innerHTML = `
+                    <div style="text-align: center; padding: 30px;">
+                        <div style="font-size: 64px; margin-bottom: 20px;">⏳</div>
+                        <h2>Подтвердите в кошельке</h2>
+                        <p style="margin: 15px 0;">Откройте кошелёк и подтвердите оплату ${item.price} TON</p>
+                    </div>
+                `;
+
+                const result = await tonConnectUI.sendTransaction(transaction);
+                console.log('TON Transaction result:', result);
+
+                // Подтверждаем платеж на сервере
+                const confirmResponse = await fetch(`${API_URL}/api/shop/confirm-ton-payment`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${jwt}`
+                    },
+                    body: JSON.stringify({
+                        userId: userId,
+                        transactionId: transactionId,
+                        txHash: result.boc
+                    })
+                });
+
+                const confirmData = await confirmResponse.json();
+
+                if (confirmData.success) {
+                    if (tg?.HapticFeedback) {
+                        tg.HapticFeedback.notificationOccurred('success');
+                    }
+
+                    modalContent.innerHTML = `
+                        <div style="text-align: center; padding: 30px;">
+                            <div style="font-size: 64px; margin-bottom: 20px;">🎉</div>
+                            <h2>Покупка успешна!</h2>
+                            <p style="margin: 15px 0;">${item.name} добавлен в инвентарь</p>
+                            <p style="font-size: 14px; opacity: 0.7;">Оплачено: ${item.price} TON</p>
+                            <button class="modal-button buy" onclick="closeModal(); loadPurchases(); loadBalance();" style="margin-top: 20px; width: 100%;">Отлично!</button>
+                        </div>
+                    `;
+                } else {
+                    throw new Error(confirmData.error || 'Ошибка подтверждения');
+                }
+
+            } catch (error) {
+                console.error('TON payment error:', error);
+                
+                // Не показываем ошибку если пользователь отменил
+                if (error?.message?.includes('User rejected') || error?.message?.includes('canceled')) {
+                    closeModal();
+                    return;
+                }
+
+                modalContent.innerHTML = `
+                    <div style="text-align: center; padding: 30px;">
+                        <div style="font-size: 64px; margin-bottom: 20px;">❌</div>
+                        <h2>Ошибка оплаты</h2>
+                        <p style="margin: 15px 0; opacity: 0.8;">${error.message || 'Попробуйте ещё раз'}</p>
+                        <button class="modal-button cancel" onclick="closeModal()" style="margin-top: 20px; width: 100%;">Закрыть</button>
+                    </div>
+                `;
+            }
+        }
+
+        // Подключение TON кошелька из магазина
+        async function connectTonWallet() {
+            try {
+                if (!tonConnectUI) {
+                    tonConnectUI = new window.TonConnectUI({
+                        manifestUrl: 'https://monkey-flipper-djm1.onrender.com/tonconnect-manifest.json',
+                        buttonRootId: null
+                    });
+                }
+                await tonConnectUI.connectWallet();
+                closeModal();
+            } catch (error) {
+                console.error('Connect wallet error:', error);
+            }
+        }
+
         // Показать ошибку
         function showError(message) {
             document.getElementById('shopContent').innerHTML = `
@@ -795,5 +950,8 @@
         // Запуск при загрузке
         init();
     </script>
+    
+    <!-- TON Connect UI SDK -->
+    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
 </body>
 </html>
