@@ -4501,17 +4501,18 @@ const config = {
     height: CONSTS.HEIGHT,
     parent: 'game-container', // Контейнер для canvas
     scale: {
-        mode: Phaser.Scale.RESIZE, // RESIZE адаптируется под любой экран
+        mode: Phaser.Scale.FIT, // FIT лучше для четкости чем RESIZE
         autoCenter: Phaser.Scale.CENTER_BOTH, // Центрируем
         width: CONSTS.WIDTH,
         height: CONSTS.HEIGHT
     },
-    // ФИКС: Настройки рендеринга для четкого изображения
+    // ФИКС: Настройки рендеринга для ЧЕТКОГО изображения на Retina
     render: {
-        antialias: true, // Включаем сглаживание для плавной картинки
-        pixelArt: false, // Не пиксель-арт (для плавных спрайтов)
-        roundPixels: false, // ФИКС: ОТКЛЮЧАЕМ округление — причина дерганья!
-        powerPreference: 'high-performance' // Максимальная производительность GPU
+        antialias: true, // Сглаживание для плавных линий
+        pixelArt: false, // Не пиксель-арт
+        roundPixels: false, // Не округляем пиксели
+        powerPreference: 'high-performance', // Максимальная производительность GPU
+        resolution: window.devicePixelRatio || 1 // КЛЮЧ! Учитываем плотность пикселей Retina
     },
     physics: {
         default: 'arcade',
