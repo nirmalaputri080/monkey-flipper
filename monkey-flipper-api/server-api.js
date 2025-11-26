@@ -3307,8 +3307,8 @@ app.get('/api/achievements/:userId', async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('Get achievements error:', err);
-    res.status(500).json({ success: false, error: 'DB error' });
+    console.error('Get achievements error:', err.message, err.stack);
+    res.status(500).json({ success: false, error: 'DB error', details: err.message });
   }
 });
 
