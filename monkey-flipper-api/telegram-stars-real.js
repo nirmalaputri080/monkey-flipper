@@ -81,26 +81,29 @@ function setupPaymentHandler(server) {
         const payment = msg.successful_payment;
         const userId = msg.from.id;
         
-        console.log(`✅ Оплата успешна!`);
+        console.log(`✅ Оплата Stars успешна!`);
         console.log(`   User: ${userId}`);
         console.log(`   Amount: ${payment.total_amount} XTR`);
         console.log(`   Payload: ${payment.invoice_payload}`);
         
-        // ЗДЕСЬ: Выдать товар пользователю в БД
+        // Выдать товар пользователю в БД
         try {
-            // Например, добавить NFT в инвентарь:
-            await addItemToInventory(userId, payment.invoice_payload);
+            const item = await addItemToInventory(userId, payment.invoice_payload, payment.total_amount);
             
             // Отправить подтверждение
             await bot.sendMessage(userId, 
-                `🎉 Покупка успешна!\n` +
-                `Товар добавлен в ваш инвентарь.`
+                `🎉 Покупка успешна!\n\n` +
+                `📦 ${item.name}\n` +
+                `💫 Оплачено: ${payment.total_amount} ⭐\n\n` +
+                `Товар добавлен в ваш инвентарь!`
             );
             
         } catch (error) {
             console.error('❌ Ошибка выдачи товара:', error);
             await bot.sendMessage(userId, 
-                `⚠️ Оплата прошла, но возникла ошибка. ` +
+                `⚠️ Оплата прошла, но возникла ошибка при выдаче товара.\n` +
+                `Payload: ${payment.invoice_payload}\n` +
+                `Сумма: ${payment.total_amount} XTR\n\n` +
                 `Свяжитесь с поддержкой.`
             );
         }
@@ -108,24 +111,48 @@ function setupPaymentHandler(server) {
 }
 
 /**
- * Выдать товар пользователю после оплаты
+ * Выдать товар пользователю после оплаты Stars
  */
-async function addItemToInventory(userId, itemId) {
+async function addItemToInventory(userId, payload, amount) {
     const { Pool } = require('pg');
     const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    const fs = require('fs');
+    const crypto = require('crypto');
     
     try {
+        // payload имеет формат: purchase_USERID_TIMESTAMP
+        // Нам нужно найти какой товар был куплен по цене
+        console.log(`🔍 Processing payment: userId=${userId}, payload=${payload}, amount=${amount}`);
+        
+        // Загружаем товары чтобы найти по цене
+        const shopItems = JSON.parse(fs.readFileSync('./shop-items.json', 'utf8'));
+        const allItems = [...shopItems.skins, ...shopItems.nft_characters, ...shopItems.boosts];
+        
+        // Ищем товар по цене в Stars (amount)
+        const item = allItems.find(i => i.priceXTR === amount);
+        
+        if (!item) {
+            console.error(`❌ Товар с ценой ${amount} XTR не найден`);
+            throw new Error(`Item with price ${amount} XTR not found`);
+        }
+        
+        const purchaseId = crypto.randomUUID();
+        
         // Добавляем покупку в БД
         await pool.query(`
-            INSERT INTO purchases (user_id, item_id, currency, status, created_at)
-            VALUES ($1, $2, 'telegram_stars', 'completed', NOW())
-        `, [userId, itemId]);
+            INSERT INTO purchases (id, user_id, item_id, item_name, price, currency, status, purchased_at)
+            VALUES ($1, $2, $3, $4, $5, 'XTR', 'active', NOW())
+        `, [purchaseId, userId, item.id, item.name, amount]);
         
-        console.log(`✅ Товар ${itemId} добавлен пользователю ${userId}`);
+        console.log(`✅ Товар "${item.name}" (${item.id}) добавлен пользователю ${userId}`);
+        
+        return item;
         
     } catch (error) {
         console.error('❌ Ошибка добавления товара:', error);
         throw error;
+    } finally {
+        await pool.end();
     }
 }
 
