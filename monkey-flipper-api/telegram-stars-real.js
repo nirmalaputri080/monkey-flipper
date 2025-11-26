@@ -181,6 +181,22 @@ async function getStarsBalance() {
 }
 
 /**
+ * Получить список транзакций Stars
+ */
+async function getStarsTransactions() {
+    try {
+        if (!bot) return [];
+        
+        const result = await bot.getStarTransactions();
+        return result.transactions || [];
+        
+    } catch (error) {
+        console.error('❌ Ошибка получения транзакций:', error);
+        return [];
+    }
+}
+
+/**
  * Вывести Stars с баланса бота (опционально)
  */
 async function withdrawStars(recipientUserId, amount) {
@@ -293,6 +309,7 @@ module.exports = {
     setupPaymentHandler,
     addItemToInventory,
     getStarsBalance,
+    getStarsTransactions,
     withdrawStars,
     showIntroVideo,
     showIntroAnimation,

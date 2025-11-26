@@ -3738,6 +3738,118 @@ app.post('/api/achievements/claim-all', async (req, res) => {
 
 // ==================== END ACHIEVEMENTS ====================
 
+// ==================== ADMIN API ====================
+
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+
+// Админ логин
+app.post('/api/admin/login', (req, res) => {
+  const { password } = req.body;
+  
+  if (password === ADMIN_PASSWORD) {
+    const token = jwt.sign({ admin: true }, JWT_SECRET, { expiresIn: '24h' });
+    res.json({ success: true, token });
+  } else {
+    res.status(401).json({ success: false, error: 'Invalid password' });
+  }
+});
+
+// Middleware для админских запросов
+const validateAdmin = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ success: false, error: 'No token' });
+  }
+  
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (!decoded.admin) {
+      return res.status(403).json({ success: false, error: 'Not admin' });
+    }
+    next();
+  } catch (err) {
+    res.status(401).json({ success: false, error: 'Invalid token' });
+  }
+};
+
+// Получить Stars транзакции
+app.get('/api/admin/stars-transactions', validateAdmin, async (req, res) => {
+  try {
+    const transactions = await telegramStars.getStarsTransactions();
+    
+    let totalStars = 0;
+    const txList = transactions.map(tx => {
+      totalStars += tx.amount;
+      return {
+        id: tx.id,
+        amount: tx.amount,
+        date: tx.date,
+        user: tx.source?.user || null
+      };
+    });
+    
+    res.json({
+      success: true,
+      totalStars,
+      transactions: txList
+    });
+  } catch (err) {
+    console.error('Admin stars error:', err);
+    res.json({ success: true, totalStars: 0, transactions: [] });
+  }
+});
+
+// Получить статистику покупок
+app.get('/api/admin/purchases-stats', validateAdmin, async (req, res) => {
+  try {
+    // Общее количество покупок
+    const totalRes = await pool.query('SELECT COUNT(*) as count FROM purchases');
+    const totalPurchases = parseInt(totalRes.rows[0].count);
+    
+    // Уникальные пользователи
+    const usersRes = await pool.query('SELECT COUNT(DISTINCT user_id) as count FROM purchases');
+    const uniqueUsers = parseInt(usersRes.rows[0].count);
+    
+    // TON транзакции
+    const tonRes = await pool.query(`
+      SELECT SUM(price) as total FROM purchases WHERE currency = 'TON' AND status != 'pending'
+    `);
+    const tonReceived = parseFloat(tonRes.rows[0].total) || 0;
+    
+    // TON транзакции список
+    const tonTxRes = await pool.query(`
+      SELECT user_id, item_name, price, purchased_at 
+      FROM purchases 
+      WHERE currency = 'TON' AND status != 'pending'
+      ORDER BY purchased_at DESC 
+      LIMIT 20
+    `);
+    
+    // Последние покупки
+    const recentRes = await pool.query(`
+      SELECT user_id, item_name, price, currency, purchased_at 
+      FROM purchases 
+      ORDER BY purchased_at DESC 
+      LIMIT 20
+    `);
+    
+    res.json({
+      success: true,
+      totalPurchases,
+      uniqueUsers,
+      tonReceived,
+      tonTransactions: tonTxRes.rows,
+      recentPurchases: recentRes.rows
+    });
+  } catch (err) {
+    console.error('Admin purchases error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==================== END ADMIN API ====================
+
 app.listen(PORT, () => {
   console.log(`API server listening on ${PORT}`);
   console.log(`💰 Игровые STARS: Включены (виртуальная валюта)`);

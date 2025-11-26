@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Stats - Monkey Flipper</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+
+        .login-form {
+            background: rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 20px;
+        }
+
+        .login-form input {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        .login-form input::placeholder {
+            color: rgba(255,255,255,0.5);
+        }
+
+        .login-form button {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 25px;
+            text-align: center;
+        }
+
+        .stat-card .icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+        }
+
+        .stat-card .value {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .label {
+            font-size: 14px;
+            opacity: 0.7;
+        }
+
+        .section {
+            background: rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .section h2 {
+            margin-bottom: 15px;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .transaction {
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .transaction .user {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .transaction .username {
+            font-weight: bold;
+        }
+
+        .transaction .date {
+            font-size: 12px;
+            opacity: 0.6;
+        }
+
+        .transaction .amount {
+            font-size: 20px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            opacity: 0.7;
+        }
+
+        .error {
+            background: rgba(255,0,0,0.2);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            color: #ff6b6b;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .refresh-btn {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            border-radius: 10px;
+            padding: 10px 20px;
+            color: #fff;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+
+        .refresh-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .ton-stats {
+            margin-top: 10px;
+        }
+
+        .ton-stats .item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐵 Monkey Flipper Admin</h1>
+
+        <!-- Форма входа -->
+        <div id="loginSection" class="login-form">
+            <h2 style="margin-bottom: 20px; text-align: center;">🔐 Вход в админку</h2>
+            <input type="password" id="adminPassword" placeholder="Введите пароль админа">
+            <button onclick="login()">Войти</button>
+            <p style="margin-top: 15px; font-size: 12px; opacity: 0.6; text-align: center;">
+                Пароль по умолчанию: admin123 (смените в переменных окружения ADMIN_PASSWORD)
+            </p>
+        </div>
+
+        <!-- Статистика (скрыта до входа) -->
+        <div id="statsSection" class="hidden">
+            <button class="refresh-btn" onclick="loadStats()">🔄 Обновить данные</button>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="icon">⭐</div>
+                    <div class="value" id="starsBalance">-</div>
+                    <div class="label">Stars баланс</div>
+                </div>
+                <div class="stat-card">
+                    <div class="icon">💎</div>
+                    <div class="value" id="tonBalance">-</div>
+                    <div class="label">TON получено</div>
+                </div>
+                <div class="stat-card">
+                    <div class="icon">🛒</div>
+                    <div class="value" id="totalPurchases">-</div>
+                    <div class="label">Всего покупок</div>
+                </div>
+                <div class="stat-card">
+                    <div class="icon">👥</div>
+                    <div class="value" id="totalUsers">-</div>
+                    <div class="label">Пользователей</div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>⭐ Транзакции Stars</h2>
+                <div id="starsTransactions">
+                    <div class="loading">Загрузка...</div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>💎 Транзакции TON</h2>
+                <div id="tonTransactions">
+                    <div class="loading">Загрузка...</div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>🛒 Последние покупки</h2>
+                <div id="recentPurchases">
+                    <div class="loading">Загрузка...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = window.location.hostname === 'localhost'
+            ? 'http://localhost:3001'
+            : 'https://monkey-flipper-djm1.onrender.com';
+
+        let adminToken = localStorage.getItem('adminToken');
+
+        // Проверяем сохранённый токен при загрузке
+        if (adminToken) {
+            showStats();
+            loadStats();
+        }
+
+        function login() {
+            const password = document.getElementById('adminPassword').value;
+            
+            fetch(`${API_URL}/api/admin/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    adminToken = data.token;
+                    localStorage.setItem('adminToken', adminToken);
+                    showStats();
+                    loadStats();
+                } else {
+                    alert('Неверный пароль!');
+                }
+            })
+            .catch(err => {
+                alert('Ошибка: ' + err.message);
+            });
+        }
+
+        function showStats() {
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('statsSection').classList.remove('hidden');
+        }
+
+        async function loadStats() {
+            try {
+                // Загружаем Stars транзакции
+                const starsRes = await fetch(`${API_URL}/api/admin/stars-transactions`, {
+                    headers: { 'Authorization': `Bearer ${adminToken}` }
+                });
+                const starsData = await starsRes.json();
+                
+                if (starsData.success) {
+                    renderStarsTransactions(starsData.transactions);
+                    document.getElementById('starsBalance').textContent = starsData.totalStars + ' ⭐';
+                }
+
+                // Загружаем статистику покупок
+                const purchasesRes = await fetch(`${API_URL}/api/admin/purchases-stats`, {
+                    headers: { 'Authorization': `Bearer ${adminToken}` }
+                });
+                const purchasesData = await purchasesRes.json();
+                
+                if (purchasesData.success) {
+                    document.getElementById('totalPurchases').textContent = purchasesData.totalPurchases;
+                    document.getElementById('totalUsers').textContent = purchasesData.uniqueUsers;
+                    document.getElementById('tonBalance').textContent = (purchasesData.tonReceived || 0) + ' 💎';
+                    renderRecentPurchases(purchasesData.recentPurchases);
+                    renderTonTransactions(purchasesData.tonTransactions);
+                }
+
+            } catch (err) {
+                console.error('Error loading stats:', err);
+            }
+        }
+
+        function renderStarsTransactions(transactions) {
+            const container = document.getElementById('starsTransactions');
+            
+            if (!transactions || transactions.length === 0) {
+                container.innerHTML = '<div class="loading">Нет транзакций</div>';
+                return;
+            }
+
+            container.innerHTML = transactions.map(tx => `
+                <div class="transaction">
+                    <div class="user">
+                        <span class="username">${tx.user?.first_name || 'Unknown'} ${tx.user?.last_name || ''}</span>
+                        <span class="date">@${tx.user?.username || 'no_username'} • ${formatDate(tx.date)}</span>
+                    </div>
+                    <div class="amount">+${tx.amount} ⭐</div>
+                </div>
+            `).join('');
+        }
+
+        function renderTonTransactions(transactions) {
+            const container = document.getElementById('tonTransactions');
+            
+            if (!transactions || transactions.length === 0) {
+                container.innerHTML = '<div class="loading">Нет TON транзакций</div>';
+                return;
+            }
+
+            container.innerHTML = transactions.map(tx => `
+                <div class="transaction">
+                    <div class="user">
+                        <span class="username">User ${tx.user_id}</span>
+                        <span class="date">${tx.item_name} • ${formatDate(tx.purchased_at)}</span>
+                    </div>
+                    <div class="amount" style="color: #0088cc;">+${tx.price} 💎</div>
+                </div>
+            `).join('');
+        }
+
+        function renderRecentPurchases(purchases) {
+            const container = document.getElementById('recentPurchases');
+            
+            if (!purchases || purchases.length === 0) {
+                container.innerHTML = '<div class="loading">Нет покупок</div>';
+                return;
+            }
+
+            container.innerHTML = purchases.map(p => `
+                <div class="transaction">
+                    <div class="user">
+                        <span class="username">${p.item_name}</span>
+                        <span class="date">User ${p.user_id} • ${formatDate(p.purchased_at)}</span>
+                    </div>
+                    <div class="amount" style="color: ${p.currency === 'XTR' ? '#FFD700' : p.currency === 'TON' ? '#0088cc' : '#4CAF50'};">
+                        ${p.price} ${p.currency === 'XTR' ? '⭐' : p.currency === 'TON' ? '💎' : '🪙'}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function formatDate(timestamp) {
+            const date = new Date(typeof timestamp === 'number' ? timestamp * 1000 : timestamp);
+            return date.toLocaleString('ru-RU', { 
+                day: '2-digit', 
+                month: '2-digit', 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+        }
+    </script>
+</body>
+</html>
