@@ -5170,18 +5170,26 @@ class WalletScene extends Phaser.Scene {
     }
 
     async onWalletConnected(wallet) {
-        console.log('✅ Кошелёк подключён:', wallet);
+        console.log('✅ Кошелёк подключён:', JSON.stringify(wallet, null, 2));
         
         const userData = getTelegramUserId();
-        const address = wallet.account?.address;
+        
+        // TON Connect возвращает адрес в wallet.account.address (raw format)
+        // или может быть в wallet.account.publicKey
+        const address = wallet.account?.address || wallet.address;
+        
+        console.log('📍 Извлечённый адрес:', address);
 
         if (!address) {
-            console.error('❌ Нет адреса в wallet:', wallet);
+            console.error('❌ Нет адреса в wallet. Структура:', Object.keys(wallet));
+            this.showError('Не удалось получить адрес кошелька');
             return;
         }
 
         // Сохраняем на сервер
         try {
+            console.log('📤 Отправка на сервер:', { userId: userData.id, walletAddress: address });
+            
             const response = await fetch(`${API_SERVER_URL}/api/wallet/connect-ton`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -5192,6 +5200,7 @@ class WalletScene extends Phaser.Scene {
             });
 
             const data = await response.json();
+            console.log('📥 Ответ сервера:', data);
 
             if (data.success) {
                 console.log('✅ Кошелёк сохранён на сервере');

@@ -1181,13 +1181,22 @@ app.get('/api/wallet/balance/:userId', async (req, res) => {
 app.post('/api/wallet/connect-ton', async (req, res) => {
   const { userId, walletAddress } = req.body;
   
+  console.log('🔗 Connect TON request:', { userId, walletAddress });
+  
   if (!userId || !walletAddress) {
     return res.status(400).json({ success: false, error: 'userId and walletAddress required' });
   }
 
-  // Валидация адреса TON (простая проверка формата)
-  const tonAddressRegex = /^(EQ|UQ)[a-zA-Z0-9_-]{46}$/;
-  if (!tonAddressRegex.test(walletAddress)) {
+  // Валидация адреса TON - поддерживаем разные форматы:
+  // 1. User-friendly: EQ... или UQ... (48 символов)
+  // 2. Raw: 0:... (66 символов с префиксом)
+  // 3. Raw hex без префикса (64 символа)
+  const isUserFriendly = /^(EQ|UQ)[a-zA-Z0-9_-]{46}$/.test(walletAddress);
+  const isRawWithPrefix = /^0:[a-fA-F0-9]{64}$/.test(walletAddress);
+  const isRawHex = /^[a-fA-F0-9]{64}$/.test(walletAddress);
+  
+  if (!isUserFriendly && !isRawWithPrefix && !isRawHex) {
+    console.log('❌ Invalid TON address format:', walletAddress);
     return res.status(400).json({ success: false, error: 'Invalid TON wallet address format' });
   }
 
