@@ -389,7 +389,22 @@ const gameResultLimiter = rateLimit({
       CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at DESC);
     `);
     
-    console.log('✅ DB ready (player_scores + duels + wallets + transactions + purchases + audit_log + migrations applied)');
+    // Таблица referrals - реферальная система
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS referrals (
+        id SERIAL PRIMARY KEY,
+        referrer_id VARCHAR(255) NOT NULL,
+        referred_id VARCHAR(255) NOT NULL UNIQUE,
+        referred_username VARCHAR(255),
+        bonus_paid BOOLEAN DEFAULT FALSE,
+        bonus_amount INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);
+      CREATE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_id);
+    `);
+    
+    console.log('✅ DB ready (player_scores + duels + wallets + transactions + purchases + audit_log + referrals + migrations applied)');
   } catch (err) {
     console.error('DB setup error', err);
   }
@@ -435,6 +450,13 @@ app.post('/api/save-score', gameResultLimiter, async (req, res) => {
   try {
     await client.query('BEGIN');
     
+    // Проверяем количество игр (для реферального бонуса)
+    const gamesCountResult = await client.query(
+      'SELECT COUNT(*) as count FROM player_scores WHERE user_id = $1',
+      [userId]
+    );
+    const isFirstGame = parseInt(gamesCountResult.rows[0].count) === 0;
+    
     // Сохраняем результат игры
     const bestResult = await client.query('SELECT MAX(score) as best FROM player_scores WHERE user_id = $1', [userId]);
     const previousBest = bestResult.rows[0]?.best || 0;
@@ -470,6 +492,38 @@ app.post('/api/save-score', gameResultLimiter, async (req, res) => {
       ]);
     }
     
+    // РЕФЕРАЛЬНЫЙ БОНУС: Если это первая игра - выплачиваем бонус рефереру
+    let referralBonusPaid = false;
+    if (isFirstGame) {
+      const refResult = await client.query(
+        'SELECT id, referrer_id, bonus_paid, bonus_amount FROM referrals WHERE referred_id = $1 AND bonus_paid = false',
+        [userId]
+      );
+      
+      if (refResult.rows.length > 0) {
+        const ref = refResult.rows[0];
+        
+        // Начисляем бонус рефереру
+        await client.query(`
+          INSERT INTO wallets (user_id, monkey_coin_balance)
+          VALUES ($1, $2)
+          ON CONFLICT (user_id)
+          DO UPDATE SET 
+            monkey_coin_balance = wallets.monkey_coin_balance + $2,
+            updated_at = NOW()
+        `, [ref.referrer_id, ref.bonus_amount]);
+        
+        // Отмечаем бонус как выплаченный
+        await client.query(
+          'UPDATE referrals SET bonus_paid = true WHERE id = $1',
+          [ref.id]
+        );
+        
+        referralBonusPaid = true;
+        console.log(`💰 Referral bonus paid: ${ref.bonus_amount} to ${ref.referrer_id} (referred: ${userId})`);
+      }
+    }
+    
     await client.query('COMMIT');
 
     return res.json({ 
@@ -477,7 +531,8 @@ app.post('/api/save-score', gameResultLimiter, async (req, res) => {
       isNewRecord, 
       bestScore: Math.max(score, previousBest),
       coinsEarned,
-      newBalance
+      newBalance,
+      referralBonusPaid
     });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -2678,11 +2733,194 @@ app.get('/tonconnect-manifest.json', (req, res) => {
   res.json(manifest);
 });
 
+// ==================== REFERRAL SYSTEM ====================
+// Константы реферальной системы
+const REFERRAL_BONUS_REFERRER = 500;  // Бонус пригласившему
+const REFERRAL_BONUS_REFERRED = 200;  // Бонус приглашённому
+
+// Получить реферальную статистику пользователя
+app.get('/api/referral/stats/:userId', async (req, res) => {
+  const { userId } = req.params;
+  
+  try {
+    // Получаем количество приглашённых и общий бонус
+    const referralsResult = await pool.query(`
+      SELECT 
+        COUNT(*) as total_referrals,
+        COUNT(CASE WHEN bonus_paid = true THEN 1 END) as paid_referrals,
+        COALESCE(SUM(CASE WHEN bonus_paid = true THEN bonus_amount ELSE 0 END), 0) as total_earned
+      FROM referrals 
+      WHERE referrer_id = $1
+    `, [userId]);
+    
+    // Получаем список последних приглашённых
+    const recentResult = await pool.query(`
+      SELECT referred_username, bonus_paid, bonus_amount, created_at
+      FROM referrals 
+      WHERE referrer_id = $1
+      ORDER BY created_at DESC
+      LIMIT 20
+    `, [userId]);
+    
+    const stats = referralsResult.rows[0];
+    
+    res.json({
+      success: true,
+      stats: {
+        totalReferrals: parseInt(stats.total_referrals) || 0,
+        paidReferrals: parseInt(stats.paid_referrals) || 0,
+        totalEarned: parseInt(stats.total_earned) || 0,
+        bonusPerReferral: REFERRAL_BONUS_REFERRER
+      },
+      referrals: recentResult.rows.map(r => ({
+        username: r.referred_username || 'Anonymous',
+        bonusPaid: r.bonus_paid,
+        bonusAmount: r.bonus_amount,
+        date: r.created_at
+      }))
+    });
+  } catch (err) {
+    console.error('Referral stats error:', err);
+    res.status(500).json({ success: false, error: 'DB error' });
+  }
+});
+
+// Применить реферальный код (вызывается при первом входе)
+app.post('/api/referral/apply', async (req, res) => {
+  const { referrerId, referredId, referredUsername } = req.body;
+  
+  if (!referrerId || !referredId) {
+    return res.status(400).json({ success: false, error: 'referrerId and referredId required' });
+  }
+  
+  // Нельзя пригласить самого себя
+  if (referrerId === referredId) {
+    return res.json({ success: false, error: 'Cannot refer yourself' });
+  }
+  
+  try {
+    // Проверяем, не был ли уже приглашён этот пользователь
+    const existingRef = await pool.query(
+      'SELECT id FROM referrals WHERE referred_id = $1',
+      [referredId]
+    );
+    
+    if (existingRef.rows.length > 0) {
+      return res.json({ success: false, error: 'User already referred', alreadyReferred: true });
+    }
+    
+    // Проверяем существует ли реферер
+    const referrerExists = await pool.query(
+      'SELECT telegram_id FROM users WHERE telegram_id = $1',
+      [referrerId]
+    );
+    
+    if (referrerExists.rows.length === 0) {
+      return res.json({ success: false, error: 'Referrer not found' });
+    }
+    
+    // Создаём реферальную связь
+    await pool.query(`
+      INSERT INTO referrals (referrer_id, referred_id, referred_username, bonus_paid, bonus_amount)
+      VALUES ($1, $2, $3, false, $4)
+    `, [referrerId, referredId, referredUsername || 'Anonymous', REFERRAL_BONUS_REFERRER]);
+    
+    // Начисляем бонус приглашённому сразу
+    await pool.query(`
+      INSERT INTO wallets (user_id, monkey_coin_balance)
+      VALUES ($1, $2)
+      ON CONFLICT (user_id)
+      DO UPDATE SET 
+        monkey_coin_balance = wallets.monkey_coin_balance + $2,
+        updated_at = NOW()
+    `, [referredId, REFERRAL_BONUS_REFERRED]);
+    
+    // Логируем
+    await logAudit('referral_applied', referredId, {
+      referrerId,
+      bonusReceived: REFERRAL_BONUS_REFERRED
+    });
+    
+    console.log(`🎁 Referral applied: ${referrerId} invited ${referredId}`);
+    
+    res.json({
+      success: true,
+      message: 'Referral applied successfully',
+      bonusReceived: REFERRAL_BONUS_REFERRED
+    });
+  } catch (err) {
+    console.error('Apply referral error:', err);
+    res.status(500).json({ success: false, error: 'DB error' });
+  }
+});
+
+// Выплатить бонус рефереру (когда приглашённый совершает первую игру)
+app.post('/api/referral/claim-bonus', async (req, res) => {
+  const { referredId } = req.body;
+  
+  if (!referredId) {
+    return res.status(400).json({ success: false, error: 'referredId required' });
+  }
+  
+  try {
+    // Находим реферальную запись
+    const refResult = await pool.query(
+      'SELECT id, referrer_id, bonus_paid, bonus_amount FROM referrals WHERE referred_id = $1',
+      [referredId]
+    );
+    
+    if (refResult.rows.length === 0) {
+      return res.json({ success: false, error: 'No referral found' });
+    }
+    
+    const ref = refResult.rows[0];
+    
+    if (ref.bonus_paid) {
+      return res.json({ success: false, error: 'Bonus already paid', alreadyPaid: true });
+    }
+    
+    // Начисляем бонус рефереру
+    await pool.query(`
+      INSERT INTO wallets (user_id, monkey_coin_balance)
+      VALUES ($1, $2)
+      ON CONFLICT (user_id)
+      DO UPDATE SET 
+        monkey_coin_balance = wallets.monkey_coin_balance + $2,
+        updated_at = NOW()
+    `, [ref.referrer_id, ref.bonus_amount]);
+    
+    // Отмечаем бонус как выплаченный
+    await pool.query(
+      'UPDATE referrals SET bonus_paid = true WHERE id = $1',
+      [ref.id]
+    );
+    
+    // Логируем
+    await logAudit('referral_bonus_paid', ref.referrer_id, {
+      referredId,
+      bonusAmount: ref.bonus_amount
+    });
+    
+    console.log(`💰 Referral bonus paid: ${ref.bonus_amount} to ${ref.referrer_id}`);
+    
+    res.json({
+      success: true,
+      referrerId: ref.referrer_id,
+      bonusPaid: ref.bonus_amount
+    });
+  } catch (err) {
+    console.error('Claim referral bonus error:', err);
+    res.status(500).json({ success: false, error: 'DB error' });
+  }
+});
+
+// ==================== END REFERRAL SYSTEM ====================
+
 app.listen(PORT, () => {
   console.log(`API server listening on ${PORT}`);
   console.log(`💰 Игровые STARS: Включены (виртуальная валюта)`);
   console.log(`⭐ Telegram Stars (XTR): Включены (реальные платежи)`);
   console.log(`📹 Intro Video API: /api/send-intro-video`);
+  console.log(`🎁 Referral System: Active (${REFERRAL_BONUS_REFERRER}/${REFERRAL_BONUS_REFERRED} coins)`);
   console.log(`🔗 TON Connect manifest: /tonconnect-manifest.json`);
 });
-
