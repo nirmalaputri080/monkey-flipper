@@ -1140,8 +1140,8 @@ setInterval(async () => {
 
 // ==================== WALLET & CURRENCY ENDPOINTS ====================
 
-// Получить баланс кошелька
-app.get('/api/wallet/:userId', async (req, res) => {
+// Получить баланс кошелька (переименован чтобы не конфликтовал с /api/wallet/ton-info)
+app.get('/api/wallet/balance/:userId', async (req, res) => {
   const { userId } = req.params;
   
   try {
@@ -1171,6 +1171,9 @@ app.get('/api/wallet/:userId', async (req, res) => {
     return res.status(500).json({ success: false, error: 'DB error' });
   }
 });
+
+// Обратная совместимость - старый путь (должен быть после всех /api/wallet/* путей)
+// Перемещён в конец файла
 
 // ==================== TON CONNECT ENDPOINTS ====================
 

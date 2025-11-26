@@ -376,7 +376,7 @@ class MenuScene extends Phaser.Scene {
     // НОВОЕ: Загрузка баланса Monkey Coins
     async loadMonkeyCoins(userId) {
         try {
-            const response = await fetch(`${API_SERVER_URL}/api/wallet/${userId}`);
+            const response = await fetch(`${API_SERVER_URL}/api/wallet/balance/${userId}`);
             const data = await response.json();
             
             if (data.success) {
