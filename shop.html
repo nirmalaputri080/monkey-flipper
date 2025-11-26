@@ -647,16 +647,50 @@
             confirmBuy();
         }
 
-        // Закрыть модальное окно
+        // Закрыть модальное окно и восстановить исходное состояние
         function closeModal() {
-            document.getElementById('buyModal').classList.remove('active');
+            const modal = document.getElementById('buyModal');
+            modal.classList.remove('active');
+            
+            // Восстанавливаем исходную структуру модалки
+            const modalContent = modal.querySelector('.modal-content');
+            modalContent.innerHTML = `
+                <div class="icon" id="modalIcon">🎨</div>
+                <h2 id="modalTitle">Купить предмет?</h2>
+                <p id="modalDescription"></p>
+                
+                <!-- Один способ оплаты -->
+                <div id="singlePaymentSection">
+                    <p id="modalPrice"></p>
+                    <div class="modal-buttons">
+                        <button class="modal-button cancel" onclick="closeModal()">Отмена</button>
+                        <button class="modal-button buy" onclick="confirmBuy()">Купить</button>
+                    </div>
+                </div>
+                
+                <!-- Несколько способов оплаты -->
+                <div id="multiPaymentSection">
+                    <p style="margin-bottom: 15px; font-size: 14px;">Выберите способ оплаты:</p>
+                    <div class="payment-methods">
+                        <button class="payment-button" id="payCoins" onclick="selectPayment('coins')" style="display: none;">
+                            <span><span class="icon">🪙</span> Monkey Coins</span>
+                            <span class="price" id="priceCoins">0</span>
+                        </button>
+                        <button class="payment-button" id="payXTR" onclick="selectPayment('xtr')" style="display: none;">
+                            <span><span class="icon">⭐</span> Telegram Stars</span>
+                            <span class="price" id="priceXTR">0</span>
+                        </button>
+                        <button class="payment-button" id="payTON" onclick="selectPayment('ton')" style="display: none;">
+                            <span><span class="icon">💎</span> TON</span>
+                            <span class="price" id="priceTON">0</span>
+                        </button>
+                    </div>
+                    <button class="modal-button cancel" onclick="closeModal()" style="margin-top: 15px; width: 100%;">Отмена</button>
+                </div>
+            `;
+            
             selectedItem = null;
             selectedPaymentMethod = null;
-            
-            // Скрываем кнопки оплаты
-            document.getElementById('payCoins').style.display = 'none';
-            document.getElementById('payXTR').style.display = 'none';
-            document.getElementById('payTON').style.display = 'none';
         }
         
         let selectedPaymentMethod = null;
