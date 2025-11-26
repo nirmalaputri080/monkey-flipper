@@ -3907,9 +3907,8 @@ app.post('/api/admin/refund-stars', validateAdmin, async (req, res) => {
 app.get('/api/admin/stars-purchases', validateAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT id, user_id, item_id, item_name, price, status, purchased_at, 
-             nonce as charge_id,
-             CASE WHEN nonce IS NOT NULL AND status != 'refunded' THEN true ELSE false END as can_refund
+      SELECT id, user_id, item_id, item_name, price, status, purchased_at,
+             CASE WHEN status != 'refunded' THEN true ELSE false END as can_refund
       FROM purchases 
       WHERE currency = 'XTR'
       ORDER BY purchased_at DESC 
