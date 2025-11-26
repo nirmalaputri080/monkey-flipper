@@ -418,7 +418,20 @@ const gameResultLimiter = rateLimit({
       CREATE INDEX IF NOT EXISTS idx_daily_rewards_user ON daily_rewards(user_id);
     `);
     
-    console.log('✅ DB ready (player_scores + duels + wallets + transactions + purchases + audit_log + referrals + daily_rewards)');
+    // Таблица achievements - достижения пользователей
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_achievements (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR(255) NOT NULL,
+        achievement_id VARCHAR(50) NOT NULL,
+        unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        claimed BOOLEAN DEFAULT FALSE,
+        UNIQUE(user_id, achievement_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_achievements_user ON user_achievements(user_id);
+    `);
+    
+    console.log('✅ DB ready (all tables + achievements)');
   } catch (err) {
     console.error('DB setup error', err);
   }
@@ -3130,6 +3143,375 @@ app.post('/api/daily-reward/claim', async (req, res) => {
 
 // ==================== END DAILY REWARDS ====================
 
+// ==================== ACHIEVEMENTS SYSTEM ====================
+// Список всех достижений
+const ACHIEVEMENTS = [
+  // Игровые достижения
+  { id: 'first_game', name: 'Первые шаги', description: 'Сыграй свою первую игру', icon: '🎮', reward: 50, category: 'game' },
+  { id: 'score_100', name: 'Новичок', description: 'Набери 100 очков в одной игре', icon: '⭐', reward: 100, category: 'game' },
+  { id: 'score_500', name: 'Опытный', description: 'Набери 500 очков в одной игре', icon: '🌟', reward: 250, category: 'game' },
+  { id: 'score_1000', name: 'Мастер', description: 'Набери 1000 очков в одной игре', icon: '💫', reward: 500, category: 'game' },
+  { id: 'score_2000', name: 'Легенда', description: 'Набери 2000 очков в одной игре', icon: '🏆', reward: 1000, category: 'game' },
+  { id: 'score_5000', name: 'Бог прыжков', description: 'Набери 5000 очков в одной игре', icon: '👑', reward: 2500, category: 'game' },
+  
+  // Достижения по количеству игр
+  { id: 'games_10', name: 'Играющий', description: 'Сыграй 10 игр', icon: '🎯', reward: 100, category: 'progress' },
+  { id: 'games_50', name: 'Упорный', description: 'Сыграй 50 игр', icon: '💪', reward: 300, category: 'progress' },
+  { id: 'games_100', name: 'Преданный', description: 'Сыграй 100 игр', icon: '🔥', reward: 500, category: 'progress' },
+  { id: 'games_500', name: 'Фанат', description: 'Сыграй 500 игр', icon: '💎', reward: 1500, category: 'progress' },
+  
+  // Социальные достижения
+  { id: 'first_referral', name: 'Друг зовёт', description: 'Пригласи первого друга', icon: '👥', reward: 200, category: 'social' },
+  { id: 'referrals_5', name: 'Популярный', description: 'Пригласи 5 друзей', icon: '🌐', reward: 500, category: 'social' },
+  { id: 'referrals_10', name: 'Лидер', description: 'Пригласи 10 друзей', icon: '🚀', reward: 1000, category: 'social' },
+  
+  // Достижения по монетам
+  { id: 'coins_1000', name: 'Копилка', description: 'Накопи 1000 монет', icon: '🪙', reward: 100, category: 'economy' },
+  { id: 'coins_10000', name: 'Богач', description: 'Накопи 10000 монет', icon: '💰', reward: 500, category: 'economy' },
+  { id: 'coins_100000', name: 'Миллионер', description: 'Накопи 100000 монет', icon: '🤑', reward: 2000, category: 'economy' },
+  
+  // Дуэли
+  { id: 'first_duel_win', name: 'Победитель', description: 'Выиграй первую дуэль', icon: '⚔️', reward: 150, category: 'duel' },
+  { id: 'duel_wins_10', name: 'Боец', description: 'Выиграй 10 дуэлей', icon: '🥊', reward: 400, category: 'duel' },
+  { id: 'duel_wins_50', name: 'Чемпион', description: 'Выиграй 50 дуэлей', icon: '🏅', reward: 1000, category: 'duel' },
+  
+  // Серии
+  { id: 'streak_7', name: 'Неделя подряд', description: 'Заходи 7 дней подряд', icon: '📅', reward: 300, category: 'streak' },
+  { id: 'streak_30', name: 'Месяц подряд', description: 'Заходи 30 дней подряд', icon: '📆', reward: 1500, category: 'streak' },
+];
+
+// Получить достижения пользователя
+app.get('/api/achievements/:userId', async (req, res) => {
+  const { userId } = req.params;
+  
+  try {
+    // Получаем разблокированные достижения
+    const unlockedResult = await pool.query(
+      'SELECT achievement_id, unlocked_at, claimed FROM user_achievements WHERE user_id = $1',
+      [userId]
+    );
+    
+    const unlockedMap = {};
+    unlockedResult.rows.forEach(row => {
+      unlockedMap[row.achievement_id] = {
+        unlockedAt: row.unlocked_at,
+        claimed: row.claimed
+      };
+    });
+    
+    // Получаем статистику пользователя для прогресса
+    const statsResult = await pool.query(`
+      SELECT 
+        (SELECT COUNT(*) FROM player_scores WHERE user_id = $1) as games_played,
+        (SELECT MAX(score) FROM player_scores WHERE user_id = $1) as best_score,
+        (SELECT monkey_coin_balance FROM wallets WHERE user_id = $1) as coins,
+        (SELECT COUNT(*) FROM referrals WHERE referrer_id = $1 AND bonus_paid = true) as referrals,
+        (SELECT COUNT(*) FROM duels WHERE (player1_id = $1 OR player2_id = $1) AND winner_id = $1) as duel_wins,
+        (SELECT day_streak FROM daily_rewards WHERE user_id = $1) as streak
+    `, [userId]);
+    
+    const stats = statsResult.rows[0] || {};
+    
+    // Формируем ответ с прогрессом
+    const achievements = ACHIEVEMENTS.map(ach => {
+      const unlocked = unlockedMap[ach.id];
+      let progress = 0;
+      let target = 1;
+      
+      // Вычисляем прогресс в зависимости от типа достижения
+      if (ach.id === 'first_game') {
+        progress = Math.min(parseInt(stats.games_played) || 0, 1);
+      } else if (ach.id.startsWith('score_')) {
+        target = parseInt(ach.id.split('_')[1]);
+        progress = Math.min(parseInt(stats.best_score) || 0, target);
+      } else if (ach.id.startsWith('games_')) {
+        target = parseInt(ach.id.split('_')[1]);
+        progress = Math.min(parseInt(stats.games_played) || 0, target);
+      } else if (ach.id === 'first_referral') {
+        progress = Math.min(parseInt(stats.referrals) || 0, 1);
+      } else if (ach.id.startsWith('referrals_')) {
+        target = parseInt(ach.id.split('_')[1]);
+        progress = Math.min(parseInt(stats.referrals) || 0, target);
+      } else if (ach.id.startsWith('coins_')) {
+        target = parseInt(ach.id.split('_')[1]);
+        progress = Math.min(parseInt(stats.coins) || 0, target);
+      } else if (ach.id === 'first_duel_win') {
+        progress = Math.min(parseInt(stats.duel_wins) || 0, 1);
+      } else if (ach.id.startsWith('duel_wins_')) {
+        target = parseInt(ach.id.split('_')[1]);
+        progress = Math.min(parseInt(stats.duel_wins) || 0, target);
+      } else if (ach.id.startsWith('streak_')) {
+        target = parseInt(ach.id.split('_')[1]);
+        progress = Math.min(parseInt(stats.streak) || 0, target);
+      }
+      
+      return {
+        ...ach,
+        unlocked: !!unlocked,
+        unlockedAt: unlocked?.unlockedAt || null,
+        claimed: unlocked?.claimed || false,
+        progress,
+        target
+      };
+    });
+    
+    // Считаем статистику
+    const totalUnlocked = achievements.filter(a => a.unlocked).length;
+    const totalClaimed = achievements.filter(a => a.claimed).length;
+    const unclaimedRewards = achievements
+      .filter(a => a.unlocked && !a.claimed)
+      .reduce((sum, a) => sum + a.reward, 0);
+    
+    res.json({
+      success: true,
+      achievements,
+      stats: {
+        total: ACHIEVEMENTS.length,
+        unlocked: totalUnlocked,
+        claimed: totalClaimed,
+        unclaimedRewards
+      }
+    });
+  } catch (err) {
+    console.error('Get achievements error:', err);
+    res.status(500).json({ success: false, error: 'DB error' });
+  }
+});
+
+// Проверить и разблокировать достижения (вызывается после игры/действия)
+app.post('/api/achievements/check', async (req, res) => {
+  const { userId } = req.body;
+  
+  if (!userId) {
+    return res.status(400).json({ success: false, error: 'userId required' });
+  }
+  
+  try {
+    // Получаем статистику
+    const statsResult = await pool.query(`
+      SELECT 
+        (SELECT COUNT(*) FROM player_scores WHERE user_id = $1) as games_played,
+        (SELECT MAX(score) FROM player_scores WHERE user_id = $1) as best_score,
+        (SELECT monkey_coin_balance FROM wallets WHERE user_id = $1) as coins,
+        (SELECT COUNT(*) FROM referrals WHERE referrer_id = $1 AND bonus_paid = true) as referrals,
+        (SELECT COUNT(*) FROM duels WHERE (player1_id = $1 OR player2_id = $1) AND winner_id = $1) as duel_wins,
+        (SELECT day_streak FROM daily_rewards WHERE user_id = $1) as streak
+    `, [userId]);
+    
+    const stats = statsResult.rows[0] || {};
+    
+    // Получаем уже разблокированные
+    const unlockedResult = await pool.query(
+      'SELECT achievement_id FROM user_achievements WHERE user_id = $1',
+      [userId]
+    );
+    const alreadyUnlocked = new Set(unlockedResult.rows.map(r => r.achievement_id));
+    
+    // Проверяем какие достижения можно разблокировать
+    const newlyUnlocked = [];
+    
+    for (const ach of ACHIEVEMENTS) {
+      if (alreadyUnlocked.has(ach.id)) continue;
+      
+      let shouldUnlock = false;
+      
+      if (ach.id === 'first_game' && parseInt(stats.games_played) >= 1) shouldUnlock = true;
+      else if (ach.id === 'score_100' && parseInt(stats.best_score) >= 100) shouldUnlock = true;
+      else if (ach.id === 'score_500' && parseInt(stats.best_score) >= 500) shouldUnlock = true;
+      else if (ach.id === 'score_1000' && parseInt(stats.best_score) >= 1000) shouldUnlock = true;
+      else if (ach.id === 'score_2000' && parseInt(stats.best_score) >= 2000) shouldUnlock = true;
+      else if (ach.id === 'score_5000' && parseInt(stats.best_score) >= 5000) shouldUnlock = true;
+      else if (ach.id === 'games_10' && parseInt(stats.games_played) >= 10) shouldUnlock = true;
+      else if (ach.id === 'games_50' && parseInt(stats.games_played) >= 50) shouldUnlock = true;
+      else if (ach.id === 'games_100' && parseInt(stats.games_played) >= 100) shouldUnlock = true;
+      else if (ach.id === 'games_500' && parseInt(stats.games_played) >= 500) shouldUnlock = true;
+      else if (ach.id === 'first_referral' && parseInt(stats.referrals) >= 1) shouldUnlock = true;
+      else if (ach.id === 'referrals_5' && parseInt(stats.referrals) >= 5) shouldUnlock = true;
+      else if (ach.id === 'referrals_10' && parseInt(stats.referrals) >= 10) shouldUnlock = true;
+      else if (ach.id === 'coins_1000' && parseInt(stats.coins) >= 1000) shouldUnlock = true;
+      else if (ach.id === 'coins_10000' && parseInt(stats.coins) >= 10000) shouldUnlock = true;
+      else if (ach.id === 'coins_100000' && parseInt(stats.coins) >= 100000) shouldUnlock = true;
+      else if (ach.id === 'first_duel_win' && parseInt(stats.duel_wins) >= 1) shouldUnlock = true;
+      else if (ach.id === 'duel_wins_10' && parseInt(stats.duel_wins) >= 10) shouldUnlock = true;
+      else if (ach.id === 'duel_wins_50' && parseInt(stats.duel_wins) >= 50) shouldUnlock = true;
+      else if (ach.id === 'streak_7' && parseInt(stats.streak) >= 7) shouldUnlock = true;
+      else if (ach.id === 'streak_30' && parseInt(stats.streak) >= 30) shouldUnlock = true;
+      
+      if (shouldUnlock) {
+        await pool.query(
+          'INSERT INTO user_achievements (user_id, achievement_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [userId, ach.id]
+        );
+        newlyUnlocked.push(ach);
+        console.log(`🎯 Achievement unlocked: ${userId} - ${ach.name}`);
+      }
+    }
+    
+    res.json({
+      success: true,
+      newlyUnlocked,
+      count: newlyUnlocked.length
+    });
+  } catch (err) {
+    console.error('Check achievements error:', err);
+    res.status(500).json({ success: false, error: 'DB error' });
+  }
+});
+
+// Забрать награду за достижение
+app.post('/api/achievements/claim', async (req, res) => {
+  const { userId, achievementId } = req.body;
+  
+  if (!userId || !achievementId) {
+    return res.status(400).json({ success: false, error: 'userId and achievementId required' });
+  }
+  
+  const achievement = ACHIEVEMENTS.find(a => a.id === achievementId);
+  if (!achievement) {
+    return res.status(400).json({ success: false, error: 'Achievement not found' });
+  }
+  
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    // Проверяем что достижение разблокировано и не забрано
+    const checkResult = await client.query(
+      'SELECT claimed FROM user_achievements WHERE user_id = $1 AND achievement_id = $2 FOR UPDATE',
+      [userId, achievementId]
+    );
+    
+    if (checkResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.json({ success: false, error: 'Achievement not unlocked' });
+    }
+    
+    if (checkResult.rows[0].claimed) {
+      await client.query('ROLLBACK');
+      return res.json({ success: false, error: 'Already claimed', alreadyClaimed: true });
+    }
+    
+    // Начисляем награду
+    await client.query(`
+      INSERT INTO wallets (user_id, monkey_coin_balance)
+      VALUES ($1, $2)
+      ON CONFLICT (user_id)
+      DO UPDATE SET 
+        monkey_coin_balance = wallets.monkey_coin_balance + $2,
+        updated_at = NOW()
+    `, [userId, achievement.reward]);
+    
+    // Отмечаем как забранное
+    await client.query(
+      'UPDATE user_achievements SET claimed = true WHERE user_id = $1 AND achievement_id = $2',
+      [userId, achievementId]
+    );
+    
+    await client.query('COMMIT');
+    
+    // Получаем новый баланс
+    const balanceResult = await pool.query(
+      'SELECT monkey_coin_balance FROM wallets WHERE user_id = $1',
+      [userId]
+    );
+    
+    console.log(`🎁 Achievement reward claimed: ${userId} - ${achievement.name} (+${achievement.reward})`);
+    
+    res.json({
+      success: true,
+      achievement,
+      reward: achievement.reward,
+      newBalance: balanceResult.rows[0]?.monkey_coin_balance || 0
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Claim achievement error:', err);
+    res.status(500).json({ success: false, error: 'DB error' });
+  } finally {
+    client.release();
+  }
+});
+
+// Забрать все доступные награды
+app.post('/api/achievements/claim-all', async (req, res) => {
+  const { userId } = req.body;
+  
+  if (!userId) {
+    return res.status(400).json({ success: false, error: 'userId required' });
+  }
+  
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    // Получаем незабранные достижения
+    const unclaimedResult = await client.query(
+      'SELECT achievement_id FROM user_achievements WHERE user_id = $1 AND claimed = false FOR UPDATE',
+      [userId]
+    );
+    
+    if (unclaimedResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.json({ success: true, claimed: 0, totalReward: 0 });
+    }
+    
+    let totalReward = 0;
+    const claimedAchievements = [];
+    
+    for (const row of unclaimedResult.rows) {
+      const achievement = ACHIEVEMENTS.find(a => a.id === row.achievement_id);
+      if (achievement) {
+        totalReward += achievement.reward;
+        claimedAchievements.push(achievement);
+      }
+    }
+    
+    // Начисляем все награды
+    await client.query(`
+      INSERT INTO wallets (user_id, monkey_coin_balance)
+      VALUES ($1, $2)
+      ON CONFLICT (user_id)
+      DO UPDATE SET 
+        monkey_coin_balance = wallets.monkey_coin_balance + $2,
+        updated_at = NOW()
+    `, [userId, totalReward]);
+    
+    // Отмечаем все как забранные
+    await client.query(
+      'UPDATE user_achievements SET claimed = true WHERE user_id = $1 AND claimed = false',
+      [userId]
+    );
+    
+    await client.query('COMMIT');
+    
+    // Получаем новый баланс
+    const balanceResult = await pool.query(
+      'SELECT monkey_coin_balance FROM wallets WHERE user_id = $1',
+      [userId]
+    );
+    
+    console.log(`🎁 All achievements claimed: ${userId} - ${claimedAchievements.length} achievements (+${totalReward})`);
+    
+    res.json({
+      success: true,
+      claimed: claimedAchievements.length,
+      totalReward,
+      achievements: claimedAchievements,
+      newBalance: balanceResult.rows[0]?.monkey_coin_balance || 0
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Claim all achievements error:', err);
+    res.status(500).json({ success: false, error: 'DB error' });
+  } finally {
+    client.release();
+  }
+});
+
+// ==================== END ACHIEVEMENTS ====================
+
 app.listen(PORT, () => {
   console.log(`API server listening on ${PORT}`);
   console.log(`💰 Игровые STARS: Включены (виртуальная валюта)`);
@@ -3137,5 +3519,6 @@ app.listen(PORT, () => {
   console.log(`📹 Intro Video API: /api/send-intro-video`);
   console.log(`🎁 Referral System: Active (${REFERRAL_BONUS_REFERRER}/${REFERRAL_BONUS_REFERRED} coins)`);
   console.log(`🏆 Daily Rewards: Active`);
+  console.log(`🎯 Achievements: ${ACHIEVEMENTS.length} achievements`);
   console.log(`🔗 TON Connect manifest: /tonconnect-manifest.json`);
 });
