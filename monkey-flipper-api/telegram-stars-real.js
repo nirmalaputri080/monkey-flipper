@@ -186,11 +186,11 @@ async function addItemToInventory(userId, payload, amount, chargeId = null) {
         
         const purchaseId = crypto.randomUUID();
         
-        // Добавляем покупку в БД (с charge_id для возможности refund)
+        // Добавляем покупку в БД (без charge_id - колонки нет в таблице)
         await pool.query(`
-            INSERT INTO purchases (id, user_id, item_id, item_name, price, currency, status, purchased_at, nonce)
-            VALUES ($1, $2, $3, $4, $5, 'XTR', 'active', NOW(), $6)
-        `, [purchaseId, userId, item.id, item.name, amount, chargeId]);
+            INSERT INTO purchases (id, user_id, item_id, item_name, price, currency, status, purchased_at)
+            VALUES ($1, $2, $3, $4, $5, 'XTR', 'active', NOW())
+        `, [purchaseId, userId, item.id, item.name, amount]);
         
         console.log(`✅ Товар "${item.name}" (${item.id}) добавлен пользователю ${userId}`);
         
