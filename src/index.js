@@ -3603,8 +3603,10 @@ class GameScene extends Phaser.Scene {
     // НОВОЕ: Логика анимаций с учётом isJumping
     if (!this.dumbTimer || !this.dumbTimer.isRunning) {
         const standingPlatform = this.getStandingPlatform();
-        const isFalling = !standingPlatform && this.player.body.velocity.y > 0 && !this.rocketActive && !this.isJumping;
-        const isRising = !standingPlatform && this.player.body.velocity.y < 0 && !this.rocketActive && !this.isJumping;
+        // ФИКС: Добавлена мёртвая зона (deadzone) для velocity чтобы избежать дёргания текстур
+        const velocityDeadzone = 30; // Игнорируем малые скорости
+        const isFalling = !standingPlatform && this.player.body.velocity.y > velocityDeadzone && !this.rocketActive && !this.isJumping;
+        const isRising = !standingPlatform && this.player.body.velocity.y < -velocityDeadzone && !this.rocketActive && !this.isJumping;
         
         // ФИКС: Используем статичные текстуры вместо анимаций для устранения джиттера
         if (isFalling) {
@@ -3699,14 +3701,17 @@ class GameScene extends Phaser.Scene {
     
     const camera = this.cameras.main;
     
+    // ФИКС: Единый lerp для плавности камеры (одинаковый для X и Y устраняет дёргание)
+    const cameraLerp = 0.1; // Единое значение для обоих осей
+    
     // ФИКС: Камера следует за игроком по X с ограничением границ
     const desiredScrollX = this.player.x - (CONSTS.WIDTH / 2);
     const minScrollX = 0; // Не уходить левее начала мира
     const maxScrollX = 0; // Не уходить правее (мир шириной 640px)
     const targetScrollX = Phaser.Math.Clamp(desiredScrollX, minScrollX, maxScrollX);
     
-    // ФИКС: ПЛАВНОЕ движение камеры по X (lerp 0.05 вместо 0.1 — более мягко)
-    camera.scrollX = Phaser.Math.Linear(camera.scrollX, targetScrollX, 0.05);
+    // ФИКС: Плавное движение камеры по X с единым lerp
+    camera.scrollX = Phaser.Math.Linear(camera.scrollX, targetScrollX, cameraLerp);
     
     // ФИКС: Камера следует за игроком по Y (центрируем по вертикали)
     const desiredScrollY = this.player.y - (CONSTS.HEIGHT / 2);
@@ -3716,14 +3721,14 @@ class GameScene extends Phaser.Scene {
     const minScrollY = -Infinity; // Можно уходить вверх бесконечно
     const targetScrollY = Phaser.Math.Clamp(desiredScrollY, minScrollY, maxScrollY);
 
-    // ФИКС: ЕЩЕ БОЛЕЕ ПЛАВНОЕ движение камеры (lerp 0.08 для Y — быстрее следит за прыжком)
-    camera.scrollY = Phaser.Math.Linear(camera.scrollY, targetScrollY, 0.08);
+    // ФИКС: Плавное движение камеры по Y с единым lerp (устраняет дёргание при прыжке)
+    camera.scrollY = Phaser.Math.Linear(camera.scrollY, targetScrollY, cameraLerp);
     
     // ФИКС: Обновляем счет каждый кадр!
     this.updateScore();
     
-    // ФИКС: Сбрасываем флаг прыжка когда обезьяна начинает падать вниз
-    if (this.isJumping && this.player.body.velocity.y > 0) {
+    // ФИКС: Сбрасываем флаг прыжка когда обезьяна начинает падать вниз (с мёртвой зоной для избежания дёргания)
+    if (this.isJumping && this.player.body.velocity.y > 50) {
         this.isJumping = false;
     }
     
