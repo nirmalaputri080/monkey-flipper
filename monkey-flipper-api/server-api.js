@@ -435,6 +435,16 @@ const gameResultLimiter = rateLimit({
       CREATE INDEX IF NOT EXISTS idx_achievements_user ON user_achievements(user_id);
     `);
     
+    // Таблица возвращённых Stars транзакций
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS refunded_stars (
+        id SERIAL PRIMARY KEY,
+        transaction_id TEXT NOT NULL UNIQUE,
+        user_id VARCHAR(255) NOT NULL,
+        refunded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    
     console.log('✅ DB ready (all tables + achievements)');
   } catch (err) {
     console.error('DB setup error', err);
@@ -3782,14 +3792,24 @@ app.get('/api/admin/stars-transactions', validateAdmin, async (req, res) => {
   try {
     const transactions = await telegramStars.getStarsTransactions();
     
+    // Получаем список возвращённых транзакций из БД
+    const refundedResult = await pool.query(
+      `SELECT transaction_id FROM refunded_stars WHERE transaction_id IS NOT NULL`
+    );
+    const refundedIds = new Set(refundedResult.rows.map(r => r.transaction_id));
+    
     let totalStars = 0;
     const txList = transactions.map(tx => {
-      totalStars += tx.amount;
+      const isRefunded = refundedIds.has(tx.id);
+      if (!isRefunded) {
+        totalStars += tx.amount;
+      }
       return {
         id: tx.id,
         amount: tx.amount,
         date: tx.date,
-        source: tx.source // Полная информация включая user и invoice_payload
+        source: tx.source,
+        refunded: isRefunded
       };
     });
     
@@ -3813,6 +3833,16 @@ app.post('/api/admin/refund-by-payload', validateAdmin, async (req, res) => {
       return res.status(400).json({ success: false, error: 'userId and transactionId required' });
     }
     
+    // Проверяем не был ли уже возвращён
+    const checkResult = await pool.query(
+      'SELECT id FROM refunded_stars WHERE transaction_id = $1',
+      [transactionId]
+    );
+    
+    if (checkResult.rows.length > 0) {
+      return res.json({ success: false, error: 'Эта транзакция уже была возвращена' });
+    }
+    
     console.log(`💸 Возврат Stars: userId=${userId}, transactionId=${transactionId}`);
     
     // Делаем возврат через Telegram API
@@ -3828,9 +3858,24 @@ app.post('/api/admin/refund-by-payload', validateAdmin, async (req, res) => {
     const result = await response.json();
     
     if (result.ok) {
+      // Сохраняем в БД что транзакция возвращена
+      await pool.query(
+        'INSERT INTO refunded_stars (transaction_id, user_id, refunded_at) VALUES ($1, $2, NOW())',
+        [transactionId, userId]
+      );
+      
       console.log(`✅ Возврат успешен: userId=${userId}`);
       res.json({ success: true, message: `Stars успешно возвращены пользователю ${userId}` });
     } else {
+      // Если уже возвращено через Telegram - тоже сохраним
+      if (result.description && result.description.includes('ALREADY_REFUNDED')) {
+        await pool.query(
+          'INSERT INTO refunded_stars (transaction_id, user_id, refunded_at) VALUES ($1, $2, NOW()) ON CONFLICT DO NOTHING',
+          [transactionId, userId]
+        );
+        return res.json({ success: false, error: 'Транзакция уже была возвращена ранее' });
+      }
+      
       console.error(`❌ Ошибка возврата:`, result);
       res.json({ success: false, error: result.description || 'Ошибка возврата' });
     }

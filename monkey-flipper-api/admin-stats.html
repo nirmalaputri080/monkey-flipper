@@ -352,19 +352,23 @@
                 const firstName = user.first_name || '';
                 const date = new Date(tx.date * 1000).toLocaleString('ru-RU');
                 const txId = tx.id || '';
+                const isRefunded = tx.refunded;
                 
                 return `
-                <div class="transaction">
+                <div class="transaction" style="${isRefunded ? 'opacity: 0.5;' : ''}">
                     <div class="user">
                         <span class="username">${firstName} (${username})</span>
                         <span class="date">${date}</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px;">
-                        <div class="amount" style="color: #FFD700;">${tx.amount} ⭐</div>
-                        <button onclick="refundTransaction(${user.id}, '${txId}')" 
+                        <div class="amount" style="color: ${isRefunded ? '#888' : '#FFD700'};">${tx.amount} ⭐</div>
+                        ${isRefunded 
+                            ? '<span style="color: #4CAF50; font-size: 12px;">✅ Возвращено</span>'
+                            : `<button onclick="refundTransaction(${user.id}, '${txId}')" 
                                 style="padding: 5px 10px; background: #ff6b6b; border: none; border-radius: 5px; color: white; cursor: pointer; font-size: 12px;">
-                            ↩️ Вернуть
-                        </button>
+                                ↩️ Вернуть
+                            </button>`
+                        }
                     </div>
                 </div>
             `}).join('');
