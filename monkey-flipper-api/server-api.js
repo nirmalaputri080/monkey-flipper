@@ -404,7 +404,21 @@ const gameResultLimiter = rateLimit({
       CREATE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_id);
     `);
     
-    console.log('✅ DB ready (player_scores + duels + wallets + transactions + purchases + audit_log + referrals + migrations applied)');
+    // Таблица daily_rewards - ежедневные награды
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS daily_rewards (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR(255) NOT NULL,
+        day_streak INTEGER DEFAULT 1,
+        last_claim_date DATE NOT NULL,
+        total_claimed INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_daily_rewards_user ON daily_rewards(user_id);
+    `);
+    
+    console.log('✅ DB ready (player_scores + duels + wallets + transactions + purchases + audit_log + referrals + daily_rewards)');
   } catch (err) {
     console.error('DB setup error', err);
   }
@@ -2916,11 +2930,212 @@ app.post('/api/referral/claim-bonus', async (req, res) => {
 
 // ==================== END REFERRAL SYSTEM ====================
 
+// ==================== DAILY REWARDS SYSTEM ====================
+// Награды по дням (прогрессивная система)
+const DAILY_REWARDS = [
+  { day: 1, coins: 50, bonus: null },
+  { day: 2, coins: 75, bonus: null },
+  { day: 3, coins: 100, bonus: null },
+  { day: 4, coins: 150, bonus: null },
+  { day: 5, coins: 200, bonus: null },
+  { day: 6, coins: 300, bonus: null },
+  { day: 7, coins: 500, bonus: '🎁 Недельный бонус!' },
+  // После 7 дней цикл повторяется с множителем
+];
+
+// Получить статус ежедневной награды
+app.get('/api/daily-reward/status/:userId', async (req, res) => {
+  const { userId } = req.params;
+  
+  try {
+    const result = await pool.query(
+      'SELECT day_streak, last_claim_date, total_claimed FROM daily_rewards WHERE user_id = $1',
+      [userId]
+    );
+    
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    
+    if (result.rows.length === 0) {
+      // Новый пользователь - может забрать награду
+      return res.json({
+        success: true,
+        canClaim: true,
+        currentStreak: 0,
+        nextReward: DAILY_REWARDS[0],
+        rewards: DAILY_REWARDS,
+        totalClaimed: 0
+      });
+    }
+    
+    const data = result.rows[0];
+    const lastClaim = data.last_claim_date.toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    
+    // Проверяем можно ли забрать награду сегодня
+    const canClaim = lastClaim !== today;
+    
+    // Проверяем streak - если пропустил день, сбрасываем
+    let currentStreak = data.day_streak;
+    if (lastClaim !== today && lastClaim !== yesterday) {
+      // Пропустил день - streak сбросится при следующем claim
+      currentStreak = 0;
+    }
+    
+    // Следующая награда (циклично по 7 дням)
+    const nextDay = canClaim ? (currentStreak % 7) : ((currentStreak % 7) + 1) % 7;
+    const nextReward = DAILY_REWARDS[nextDay];
+    
+    // Добавляем множитель за каждую полную неделю
+    const weekMultiplier = Math.floor(currentStreak / 7) + 1;
+    const adjustedReward = {
+      ...nextReward,
+      coins: nextReward.coins * weekMultiplier,
+      multiplier: weekMultiplier > 1 ? `x${weekMultiplier}` : null
+    };
+    
+    return res.json({
+      success: true,
+      canClaim,
+      currentStreak,
+      nextReward: adjustedReward,
+      rewards: DAILY_REWARDS.map((r, i) => ({
+        ...r,
+        coins: r.coins * weekMultiplier,
+        completed: i < (currentStreak % 7),
+        current: i === (currentStreak % 7)
+      })),
+      totalClaimed: data.total_claimed,
+      lastClaimDate: lastClaim
+    });
+  } catch (err) {
+    console.error('Daily reward status error:', err);
+    res.status(500).json({ success: false, error: 'DB error' });
+  }
+});
+
+// Забрать ежедневную награду
+app.post('/api/daily-reward/claim', async (req, res) => {
+  const { userId } = req.body;
+  
+  if (!userId) {
+    return res.status(400).json({ success: false, error: 'userId required' });
+  }
+  
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    
+    // Получаем текущие данные
+    const result = await client.query(
+      'SELECT day_streak, last_claim_date, total_claimed FROM daily_rewards WHERE user_id = $1 FOR UPDATE',
+      [userId]
+    );
+    
+    let currentStreak = 0;
+    let totalClaimed = 0;
+    
+    if (result.rows.length > 0) {
+      const data = result.rows[0];
+      const lastClaim = data.last_claim_date.toISOString().split('T')[0];
+      
+      // Проверяем не забрал ли уже сегодня
+      if (lastClaim === today) {
+        await client.query('ROLLBACK');
+        return res.json({ success: false, error: 'Already claimed today', alreadyClaimed: true });
+      }
+      
+      // Проверяем streak
+      if (lastClaim === yesterday) {
+        // Продолжаем streak
+        currentStreak = data.day_streak;
+      } else {
+        // Пропустил день - сбрасываем streak
+        currentStreak = 0;
+      }
+      
+      totalClaimed = data.total_claimed;
+    }
+    
+    // Вычисляем награду
+    const rewardDay = currentStreak % 7;
+    const weekMultiplier = Math.floor(currentStreak / 7) + 1;
+    const baseReward = DAILY_REWARDS[rewardDay];
+    const coinsReward = baseReward.coins * weekMultiplier;
+    
+    // Начисляем монеты
+    await client.query(`
+      INSERT INTO wallets (user_id, monkey_coin_balance)
+      VALUES ($1, $2)
+      ON CONFLICT (user_id)
+      DO UPDATE SET 
+        monkey_coin_balance = wallets.monkey_coin_balance + $2,
+        updated_at = NOW()
+    `, [userId, coinsReward]);
+    
+    // Обновляем daily_rewards
+    const newStreak = currentStreak + 1;
+    await client.query(`
+      INSERT INTO daily_rewards (user_id, day_streak, last_claim_date, total_claimed)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (user_id)
+      DO UPDATE SET 
+        day_streak = $2,
+        last_claim_date = $3,
+        total_claimed = daily_rewards.total_claimed + $4
+    `, [userId, newStreak, today, coinsReward]);
+    
+    // Логируем
+    await logAudit('daily_reward_claimed', userId, {
+      day: rewardDay + 1,
+      streak: newStreak,
+      coins: coinsReward,
+      multiplier: weekMultiplier
+    });
+    
+    await client.query('COMMIT');
+    
+    console.log(`🏆 Daily reward claimed: ${userId} - Day ${rewardDay + 1}, Streak ${newStreak}, +${coinsReward} coins`);
+    
+    // Получаем новый баланс
+    const balanceResult = await pool.query(
+      'SELECT monkey_coin_balance FROM wallets WHERE user_id = $1',
+      [userId]
+    );
+    
+    return res.json({
+      success: true,
+      reward: {
+        day: rewardDay + 1,
+        coins: coinsReward,
+        bonus: baseReward.bonus,
+        multiplier: weekMultiplier > 1 ? `x${weekMultiplier}` : null
+      },
+      newStreak,
+      newBalance: balanceResult.rows[0]?.monkey_coin_balance || coinsReward,
+      totalClaimed: totalClaimed + coinsReward
+    });
+    
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Daily reward claim error:', err);
+    res.status(500).json({ success: false, error: 'DB error' });
+  } finally {
+    client.release();
+  }
+});
+
+// ==================== END DAILY REWARDS ====================
+
 app.listen(PORT, () => {
   console.log(`API server listening on ${PORT}`);
   console.log(`💰 Игровые STARS: Включены (виртуальная валюта)`);
   console.log(`⭐ Telegram Stars (XTR): Включены (реальные платежи)`);
   console.log(`📹 Intro Video API: /api/send-intro-video`);
   console.log(`🎁 Referral System: Active (${REFERRAL_BONUS_REFERRER}/${REFERRAL_BONUS_REFERRED} coins)`);
+  console.log(`🏆 Daily Rewards: Active`);
   console.log(`🔗 TON Connect manifest: /tonconnect-manifest.json`);
 });
