@@ -533,36 +533,35 @@ app.post('/api/save-score', gameResultLimiter, async (req, res) => {
       ]);
     }
     
-    // РЕФЕРАЛЬНЫЙ БОНУС: Если это первая игра - выплачиваем бонус рефереру
+    // РЕФЕРАЛЬНЫЙ БОНУС: Проверяем есть ли невыплаченный бонус рефереру
+    // Выплачиваем при первой игре ПОСЛЕ регистрации реферала (не при первой игре вообще)
     let referralBonusPaid = false;
-    if (isFirstGame) {
-      const refResult = await client.query(
-        'SELECT id, referrer_id, bonus_paid, bonus_amount FROM referrals WHERE referred_id = $1 AND bonus_paid = false',
-        [userId]
+    const refResult = await client.query(
+      'SELECT id, referrer_id, bonus_paid, bonus_amount FROM referrals WHERE referred_id = $1 AND bonus_paid = false',
+      [userId]
+    );
+    
+    if (refResult.rows.length > 0) {
+      const ref = refResult.rows[0];
+      
+      // Начисляем бонус рефереру
+      await client.query(`
+        INSERT INTO wallets (user_id, monkey_coin_balance)
+        VALUES ($1, $2)
+        ON CONFLICT (user_id)
+        DO UPDATE SET 
+          monkey_coin_balance = wallets.monkey_coin_balance + $2,
+          updated_at = NOW()
+      `, [ref.referrer_id, ref.bonus_amount]);
+      
+      // Отмечаем бонус как выплаченный
+      await client.query(
+        'UPDATE referrals SET bonus_paid = true WHERE id = $1',
+        [ref.id]
       );
       
-      if (refResult.rows.length > 0) {
-        const ref = refResult.rows[0];
-        
-        // Начисляем бонус рефереру
-        await client.query(`
-          INSERT INTO wallets (user_id, monkey_coin_balance)
-          VALUES ($1, $2)
-          ON CONFLICT (user_id)
-          DO UPDATE SET 
-            monkey_coin_balance = wallets.monkey_coin_balance + $2,
-            updated_at = NOW()
-        `, [ref.referrer_id, ref.bonus_amount]);
-        
-        // Отмечаем бонус как выплаченный
-        await client.query(
-          'UPDATE referrals SET bonus_paid = true WHERE id = $1',
-          [ref.id]
-        );
-        
-        referralBonusPaid = true;
-        console.log(`💰 Referral bonus paid: ${ref.bonus_amount} to ${ref.referrer_id} (referred: ${userId})`);
-      }
+      referralBonusPaid = true;
+      console.log(`💰 Referral bonus paid: ${ref.bonus_amount} to ${ref.referrer_id} (referred: ${userId})`);
     }
     
     await client.query('COMMIT');
@@ -3006,36 +3005,82 @@ app.post('/api/referral/apply', async (req, res) => {
     return res.status(400).json({ success: false, error: 'referrerId and referredId required' });
   }
   
-  // Нельзя пригласить самого себя
-  if (referrerId === referredId) {
+  // === ЗАЩИТА ОТ НАКРУТКИ ===
+  
+  // 1. Нельзя пригласить самого себя
+  if (String(referrerId) === String(referredId)) {
+    console.log(`⚠️ Referral blocked: self-referral attempt ${referrerId}`);
     return res.json({ success: false, error: 'Cannot refer yourself' });
   }
   
+  // 2. Проверяем что ID похожи на настоящие Telegram ID (числа)
+  if (!/^\d+$/.test(String(referrerId)) || !/^\d+$/.test(String(referredId))) {
+    console.log(`⚠️ Referral blocked: invalid ID format`);
+    return res.json({ success: false, error: 'Invalid user ID format' });
+  }
+  
   try {
-    // Проверяем, не был ли уже приглашён этот пользователь
+    // 3. Проверяем, не был ли уже приглашён этот пользователь
     const existingRef = await pool.query(
       'SELECT id FROM referrals WHERE referred_id = $1',
       [referredId]
     );
     
     if (existingRef.rows.length > 0) {
+      console.log(`⚠️ Referral blocked: ${referredId} already referred`);
       return res.json({ success: false, error: 'User already referred', alreadyReferred: true });
     }
     
-    // Проверяем существует ли реферер
+    // 4. Проверяем существует ли реферер в системе (должен был хоть раз сыграть)
     const referrerExists = await pool.query(
       'SELECT telegram_id FROM users WHERE telegram_id = $1',
       [referrerId]
     );
     
     if (referrerExists.rows.length === 0) {
+      console.log(`⚠️ Referral blocked: referrer ${referrerId} not found`);
       return res.json({ success: false, error: 'Referrer not found' });
     }
     
+    // 5. Проверяем не приглашал ли реферер слишком много людей за последний час (анти-спам)
+    const recentReferrals = await pool.query(`
+      SELECT COUNT(*) as count FROM referrals 
+      WHERE referrer_id = $1 AND created_at > NOW() - INTERVAL '1 hour'
+    `, [referrerId]);
+    
+    if (parseInt(recentReferrals.rows[0].count) >= 10) {
+      console.log(`⚠️ Referral blocked: ${referrerId} too many referrals in last hour`);
+      return res.json({ success: false, error: 'Too many referrals, try again later' });
+    }
+    
+    // 6. Проверяем не является ли приглашённый реферером того кто его приглашает (циклическая ссылка)
+    const reverseRef = await pool.query(
+      'SELECT id FROM referrals WHERE referrer_id = $1 AND referred_id = $2',
+      [referredId, referrerId]
+    );
+    
+    if (reverseRef.rows.length > 0) {
+      console.log(`⚠️ Referral blocked: circular referral ${referrerId} <-> ${referredId}`);
+      return res.json({ success: false, error: 'Circular referral not allowed' });
+    }
+    
+    // 7. Проверяем что приглашённый - новый пользователь (не играл раньше)
+    const existingPlayer = await pool.query(
+      'SELECT user_id FROM player_scores WHERE user_id = $1',
+      [referredId]
+    );
+    
+    if (existingPlayer.rows.length > 0) {
+      console.log(`⚠️ Referral blocked: ${referredId} already played before`);
+      return res.json({ success: false, error: 'User already exists in system' });
+    }
+    
+    // === ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ ===
+    
     // Создаём реферальную связь
     await pool.query(`
-      INSERT INTO referrals (referrer_id, referred_id, referred_username, bonus_paid, bonus_amount)
-      VALUES ($1, $2, $3, false, $4)
+      INSERT INTO referrals (referrer_id, referred_id, referred_username, bonus_paid, bonus_amount, created_at)
+      VALUES ($1, $2, $3, false, $4, NOW())
     `, [referrerId, referredId, referredUsername || 'Anonymous', REFERRAL_BONUS_REFERRER]);
     
     // Начисляем бонус приглашённому сразу
