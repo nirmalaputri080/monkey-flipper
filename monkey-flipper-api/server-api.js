@@ -2547,8 +2547,8 @@ app.post('/api/shop/create-ton-transaction', validateShopAuth, async (req, res) 
       messages: [
         {
           address: TON_WALLET_ADDRESS,
-          amount: amountNano.toString(),
-          payload: Buffer.from(transactionId).toString('base64') // ID транзакции в payload
+          amount: amountNano.toString()
+          // Не используем payload - transactionId храним в БД
         }
       ]
     };
