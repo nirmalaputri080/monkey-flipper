@@ -46,7 +46,11 @@ async function createStarsInvoice(userId, itemName, itemDescription, starsAmount
             [{ label: itemName, amount: starsAmount }] // prices
         );
 
-        console.log(`✅ Инвойс-ссылка создана: ${starsAmount} Stars для "${itemName}", user: ${userId}`);
+        console.log(`✅ Инвойс-ссылка создана: ${invoiceLink}`);
+        console.log(`   Stars: ${starsAmount}, Item: "${itemName}", User: ${userId}`);
+        
+        // invoiceLink имеет формат: https://t.me/$INVOICE_SLUG
+        // tg.openInvoice() принимает полный URL
         return invoiceLink;
 
     } catch (error) {

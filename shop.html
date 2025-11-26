@@ -736,6 +736,12 @@
                             tg.HapticFeedback.impactOccurred('medium');
                         }
                         
+                        console.log('📋 Invoice URL received:', data.invoice);
+                        
+                        // Извлекаем slug из URL если нужно
+                        // URL формат: https://t.me/$SLUG или https://t.me/invoice/SLUG
+                        let invoiceUrl = data.invoice;
+                        
                         modalContent.innerHTML = `
                             <div style="text-align: center; padding: 30px;">
                                 <div style="font-size: 64px; margin-bottom: 20px;">⏳</div>
@@ -746,7 +752,8 @@
                         
                         // Открываем инвойс через Telegram WebApp API
                         if (tg?.openInvoice) {
-                            tg.openInvoice(data.invoice, async (status) => {
+                            console.log('📋 Calling tg.openInvoice with:', invoiceUrl);
+                            tg.openInvoice(invoiceUrl, async (status) => {
                                 console.log('Invoice status:', status);
                                 
                                 if (status === 'paid') {

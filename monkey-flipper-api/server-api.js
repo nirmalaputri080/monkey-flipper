@@ -2469,10 +2469,11 @@ app.post('/api/shop/create-stars-invoice', validateShopAuth, async (req, res) =>
     );
     
     console.log(`✅ Инвойс создан: ${item.name} за ${item.priceXTR} XTR`);
+    console.log(`   Invoice result:`, invoice, typeof invoice);
     
     res.json({
       success: true,
-      invoice,
+      invoice: invoice,
       item: {
         id: item.id,
         name: item.name,
