@@ -211,6 +211,24 @@ const CONSTS = {
     BALLOON_SMASH_DURATION: 300, // НОВОЕ: Длительность анимации взрыва шарика (ms) - было 1000
 };
 
+// ФИКС: DPI для четкого текста на Retina дисплеях
+const DPR = window.devicePixelRatio || 1;
+
+// ФИКС: Патчим Phaser.GameObjects.Text чтобы ВСЕ тексты были четкими
+const originalTextInit = Phaser.GameObjects.Text.prototype.initRTL;
+Phaser.GameObjects.Text.prototype.setResolution = function(value) {
+    this.style.resolution = value;
+    this.updateText();
+    return this;
+};
+
+// Переопределяем фабрику текста для автоматического resolution
+const originalTextFactory = Phaser.GameObjects.GameObjectFactory.prototype.text;
+Phaser.GameObjects.GameObjectFactory.prototype.text = function(x, y, text, style) {
+    const finalStyle = { ...style, resolution: DPR };
+    return originalTextFactory.call(this, x, y, text, finalStyle);
+};
+
 class MenuScene extends Phaser.Scene {
     constructor() {
         super({ key: 'MenuScene' });
