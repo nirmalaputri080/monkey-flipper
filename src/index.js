@@ -1714,6 +1714,10 @@ class GameScene extends Phaser.Scene {
     this.equippedItems = {}; // НОВОЕ: Все экипированные предметы
     this.jumpMultiplier = 1.0; // НОВОЕ: Множитель для прыжка (1.0 = нормально, 1.5 = +50%)
     this.hasShield = false; // НОВОЕ: Есть ли активный щит от падения
+    this.boostActive = false; // НОВОЕ: Активен ли временный буст (3 секунды)
+    this.boostTimer = null; // НОВОЕ: Таймер для буста
+    this.boostTimerText = null; // НОВОЕ: UI для таймера буста
+    this.boostDuration = 3000; // НОВОЕ: Длительность буста в миллисекундах (3 секунды)
     this.isFalling = false;
     this.isJumping = false; // НОВОЕ: Флаг для состояния прыжка
     this.lastBouncePlatform = null; // ФИКС: Запоминаем последнюю платформу с которой прыгнули
@@ -4228,6 +4232,7 @@ class GameScene extends Phaser.Scene {
     }
 
     // Применяет игровые эффекты от бустов (высота прыжка, щит и т.д.)
+    // ВАЖНО: Прыжковые бусты работают только первые 3 секунды!
     applyBoostEffects() {
         if (!this.equippedItems || !this.equippedItems.boost) {
             console.log('ℹ️ Нет бустов для применения эффектов');
@@ -4237,23 +4242,150 @@ class GameScene extends Phaser.Scene {
         const boostId = this.equippedItems.boost;
         console.log('🎮 Применяем игровые эффекты буста:', boostId);
 
-        // Super Jump - увеличивает высоту прыжка на 30%
+        // Super Jump - увеличивает высоту прыжка на 30% НА 3 СЕКУНДЫ
         if (boostId === 'boost_super_jump') {
-            this.jumpMultiplier = 1.3; // Было 1.5 (слишком имбово)
-            console.log('🚀 Высота прыжка увеличена на 30%');
+            this.activateTimedBoost('jump', 1.3); // 3 секунды
+            console.log('🚀 Высота прыжка увеличена на 30% (3 сек)');
         }
         
-        // Shield - защита от одного падения
+        // Shield - защита от одного падения (работает всю игру, но одноразово)
         if (boostId === 'boost_shield') {
             this.hasShield = true;
             console.log('🛡️ Щит активирован');
         }
         
-        // Mega Pack - комбо (прыжок + щит)
+        // Mega Pack - комбо (прыжок НА 3 СЕК + щит)
         if (boostId === 'boost_mega_pack') {
-            this.jumpMultiplier = 1.3; // Было 1.5
+            this.activateTimedBoost('jump', 1.3); // 3 секунды
             this.hasShield = true;
-            console.log('⭐ МЕГА БУСТ: Прыжок +30% + Щит');
+            console.log('⭐ МЕГА БУСТ: Прыжок +30% (3 сек) + Щит');
+        }
+        
+        // Double Coins - только бонус к финальному счёту (нет игровых эффектов)
+        if (boostId === 'boost_double_coins') {
+            console.log('💰 Double Coins: бонус будет начислен в конце игры');
+        }
+    }
+
+    // НОВОЕ: Активация временного буста с таймером
+    activateTimedBoost(type, multiplier) {
+        if (type === 'jump') {
+            this.jumpMultiplier = multiplier;
+            this.boostActive = true;
+            
+            // Создаём UI таймер буста
+            this.showBoostTimer();
+            
+            // Запускаем таймер на 3 секунды
+            this.boostTimer = this.time.delayedCall(this.boostDuration, () => {
+                this.deactivateTimedBoost();
+            });
+            
+            // Обновляем UI таймера каждые 100мс
+            this.updateBoostTimerInterval = this.time.addEvent({
+                delay: 100,
+                callback: () => this.updateBoostTimerUI(),
+                loop: true
+            });
+        }
+    }
+    
+    // НОВОЕ: Деактивация временного буста
+    deactivateTimedBoost() {
+        console.log('⏱️ Буст закончился!');
+        this.jumpMultiplier = 1.0; // Сбрасываем множитель
+        this.boostActive = false;
+        
+        // Убираем UI таймера
+        if (this.boostTimerText) {
+            // Анимация исчезновения
+            this.tweens.add({
+                targets: this.boostTimerText,
+                alpha: 0,
+                scale: 0.5,
+                duration: 300,
+                onComplete: () => {
+                    if (this.boostTimerText) {
+                        this.boostTimerText.destroy();
+                        this.boostTimerText = null;
+                    }
+                }
+            });
+        }
+        
+        // Останавливаем интервал обновления
+        if (this.updateBoostTimerInterval) {
+            this.updateBoostTimerInterval.remove();
+            this.updateBoostTimerInterval = null;
+        }
+        
+        // Показываем уведомление
+        const endText = this.add.text(CONSTS.WIDTH / 2, 150, '⏱️ Буст закончился!', {
+            fontSize: '28px',
+            fill: '#FF6600',
+            fontStyle: 'bold',
+            stroke: '#000',
+            strokeThickness: 4
+        }).setOrigin(0.5).setDepth(100).setScrollFactor(0);
+        
+        this.tweens.add({
+            targets: endText,
+            alpha: 0,
+            y: 100,
+            duration: 1500,
+            onComplete: () => endText.destroy()
+        });
+    }
+    
+    // НОВОЕ: Показываем UI таймера буста
+    showBoostTimer() {
+        const boostId = this.equippedItems?.boost;
+        const boostIcons = {
+            'boost_super_jump': '🚀',
+            'boost_mega_pack': '⭐'
+        };
+        const icon = boostIcons[boostId] || '⚡';
+        
+        this.boostTimerText = this.add.text(CONSTS.WIDTH / 2, 100, `${icon} 3.0s`, {
+            fontSize: '32px',
+            fill: '#00FF00',
+            fontStyle: 'bold',
+            stroke: '#000',
+            strokeThickness: 4,
+            backgroundColor: '#000000AA',
+            padding: { x: 15, y: 8 }
+        }).setOrigin(0.5).setDepth(100).setScrollFactor(0);
+        
+        // Анимация появления
+        this.boostTimerText.setAlpha(0);
+        this.boostTimerText.setScale(0.5);
+        this.tweens.add({
+            targets: this.boostTimerText,
+            alpha: 1,
+            scale: 1,
+            duration: 300
+        });
+    }
+    
+    // НОВОЕ: Обновление UI таймера
+    updateBoostTimerUI() {
+        if (!this.boostTimerText || !this.boostTimer) return;
+        
+        const remaining = this.boostTimer.getRemaining() / 1000;
+        const boostId = this.equippedItems?.boost;
+        const boostIcons = {
+            'boost_super_jump': '🚀',
+            'boost_mega_pack': '⭐'
+        };
+        const icon = boostIcons[boostId] || '⚡';
+        
+        this.boostTimerText.setText(`${icon} ${remaining.toFixed(1)}s`);
+        
+        // Меняем цвет когда мало времени
+        if (remaining <= 1) {
+            this.boostTimerText.setFill('#FF0000');
+        } else if (remaining <= 2) {
+            this.boostTimerText.setFill('#FFFF00');
         }
     }
 
@@ -4272,12 +4404,12 @@ class GameScene extends Phaser.Scene {
 
         // Бонусы от разных бустов (к финальному счёту)
         const boostBonuses = {
-            'boost_super_jump': baseScore * 0.15,       // +15% к счёту (+ высота прыжка x1.3)
-            'boost_double_coins': baseScore * 0.5,      // +50% к счёту (было 100%, слишком имбово)
+            'boost_super_jump': baseScore * 0.15,       // +15% к счёту
+            'boost_double_coins': baseScore * 0.5,      // +50% к счёту
             'boost_shield': baseScore * 0.1,            // +10% к счёту (+ защита от падения)
-            'boost_mega_pack': baseScore * 0.5,         // +50% к счёту (+ прыжок x1.3 + щит)
-            'trail_effect': 500,                        // +500 фиксированных очков (было 1000)
-            'basic_platform_skin': 300                  // +300 фиксированных очков (было 500)
+            'boost_mega_pack': baseScore * 0.5,         // +50% к счёту (+ прыжок 3сек + щит)
+            'trail_effect': 500,                        // +500 фиксированных очков
+            'basic_platform_skin': 300                  // +300 фиксированных очков
         };
 
         bonusScore = boostBonuses[boostId] || 0;
@@ -4301,38 +4433,39 @@ class GameScene extends Phaser.Scene {
             return;
         }
 
-        // Показываем активный буст
+        // Показываем активный буст (только для бустов без таймера)
         if (this.equippedItems.boost) {
             console.log('✅ Найден экипированный буст:', this.equippedItems.boost);
             
-            // Иконки для каждого буста
-            const boostIcons = {
-                'boost_super_jump': '🚀',
-                'boost_double_coins': '💰',
-                'boost_shield': '🛡️',
-                'boost_mega_pack': '⭐',
-                'trail_effect': '✨',
-                'basic_platform_skin': '🎨'
-            };
+            const boostId = this.equippedItems.boost;
             
-            const icon = boostIcons[this.equippedItems.boost] || '🎁';
-            console.log('💎 Отображаем иконку буста:', icon);
+            // Для временных бустов (super_jump, mega_pack) таймер уже показывается
+            // Показываем иконку только для постоянных бустов (shield, double_coins)
+            if (boostId === 'boost_shield' || boostId === 'boost_double_coins') {
+                const boostIcons = {
+                    'boost_double_coins': '💰',
+                    'boost_shield': '🛡️'
+                };
+                
+                const icon = boostIcons[boostId] || '🎁';
+                console.log('💎 Отображаем иконку буста:', icon);
 
-            // Иконка в правом верхнем углу
-            const boostIcon = this.add.text(CONSTS.WIDTH - 50, 30, icon, {
-                fontSize: '40px',
-                fill: '#FFD700'
-            }).setOrigin(0.5).setDepth(100).setScrollFactor(0);
+                // Иконка в правом верхнем углу
+                const boostIcon = this.add.text(CONSTS.WIDTH - 50, 30, icon, {
+                    fontSize: '40px',
+                    fill: '#FFD700'
+                }).setOrigin(0.5).setDepth(100).setScrollFactor(0);
 
-            // Анимация пульсации
-            this.tweens.add({
-                targets: boostIcon,
-                scale: 1.2,
-                duration: 800,
-                yoyo: true,
-                repeat: -1,
-                ease: 'Sine.easeInOut'
-            });
+                // Анимация пульсации
+                this.tweens.add({
+                    targets: boostIcon,
+                    scale: 1.2,
+                    duration: 800,
+                    yoyo: true,
+                    repeat: -1,
+                    ease: 'Sine.easeInOut'
+                });
+            }
         } else {
             console.log('⚠️ Нет активного буста для отображения');
         }

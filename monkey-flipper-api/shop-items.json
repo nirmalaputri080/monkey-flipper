@@ -97,45 +97,46 @@
     {
       "id": "boost_super_jump",
       "name": "Super Jump Boost",
-      "description": "Увеличивает высоту прыжка на 50% на 10 игр",
+      "description": "🚀 Прыжок +30% на первые 3 сек игры",
       "category": "boosts",
-      "priceStars": 15,
-      "priceXTR": 1,
-      "priceCoins": 600,
+      "priceStars": 35,
+      "priceXTR": 3,
+      "priceCoins": 2500,
       "currency": "both",
-      "duration": 10,
+      "duration": 1,
       "effect": {
         "type": "jump_height",
-        "multiplier": 1.5
+        "multiplier": 1.3,
+        "durationSec": 3
       },
       "image": "/assets/boosts/super_jump.png"
     },
     {
       "id": "boost_double_coins",
       "name": "Double Coins Boost",
-      "description": "Удваивает получаемые монеты на 5 игр",
+      "description": "💰 +50% к финальному счёту",
       "category": "boosts",
-      "priceStars": 20,
-      "priceXTR": 2,
-      "priceCoins": 800,
+      "priceStars": 50,
+      "priceXTR": 5,
+      "priceCoins": 3500,
       "currency": "both",
-      "duration": 5,
+      "duration": 1,
       "effect": {
         "type": "coin_multiplier",
-        "multiplier": 2
+        "multiplier": 1.5
       },
       "image": "/assets/boosts/double_coins.png"
     },
     {
       "id": "boost_shield",
       "name": "Shield Boost",
-      "description": "Защита от одного падения на 3 игры",
+      "description": "🛡️ Защита от одного падения",
       "category": "boosts",
-      "priceStars": 10,
-      "priceXTR": 1,
-      "priceCoins": 400,
+      "priceStars": 25,
+      "priceXTR": 2,
+      "priceCoins": 1800,
       "currency": "both",
-      "duration": 3,
+      "duration": 1,
       "effect": {
         "type": "shield",
         "charges": 1
@@ -145,16 +146,17 @@
     {
       "id": "boost_mega_pack",
       "name": "Mega Boost Pack",
-      "description": "Набор всех бустов на 15 игр",
+      "description": "⭐ Прыжок +30% (3 сек) + Щит + Бонус счёта",
       "category": "boosts",
-      "priceStars": 50,
-      "priceXTR": 5,
-      "priceCoins": 2000,
+      "priceStars": 100,
+      "priceXTR": 10,
+      "priceCoins": 7500,
       "currency": "both",
-      "duration": 15,
+      "duration": 1,
       "effect": {
         "type": "combo",
-        "effects": ["jump_height", "coin_multiplier", "shield"]
+        "effects": ["jump_height", "coin_multiplier", "shield"],
+        "durationSec": 3
       },
       "image": "/assets/boosts/mega_pack.png"
     }
