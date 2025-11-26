@@ -238,24 +238,16 @@
                 tryPlayVideo();
             });
             
-            // Таймаут на случай зависания (уменьшен до 3 сек для быстрой загрузки)
+            // Таймаут на случай зависания - даём больше времени для просмотра
             setTimeout(function() {
                 if (!overlay.classList.contains('hidden')) {
-                    console.log('⏱️ Таймаут intro video (3 сек)');
+                    console.log('⏱️ Таймаут intro video (30 сек)');
                     hideIntro();
                 }
-            }, 3000);
+            }, 30000);
             
             // Немедленная попытка запуска
             setTimeout(tryPlayVideo, 100);
-            
-            // ФИКС: Дополнительная проверка - если через 1 сек видео не играет, скрываем
-            setTimeout(function() {
-                if (!videoStarted && !overlay.classList.contains('hidden')) {
-                    console.log('⚠️ Видео не запустилось за 1 сек, скрываем intro');
-                    hideIntro();
-                }
-            }, 1000);
         })();
     </script>
 </body>
