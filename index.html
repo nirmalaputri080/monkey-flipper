@@ -153,8 +153,9 @@
 <body>
     <!-- 🎬 INTRO VIDEO OVERLAY -->
     <div id="intro-video-overlay">
-        <video id="intro-video" playsinline muted preload="auto">
+        <video id="intro-video" playsinline muted preload="auto" autoplay>
             <source src="./assets/intro.mp4" type="video/mp4">
+            Ваш браузер не поддерживает видео
         </video>
         <div id="skip-intro-hint">👆 Нажмите чтобы пропустить</div>
     </div>
@@ -166,65 +167,87 @@
         (function() {
             const overlay = document.getElementById('intro-video-overlay');
             const video = document.getElementById('intro-video');
+            let videoStarted = false;
+            
+            console.log('🎬 Intro video инициализация');
+            console.log('📍 Video src:', video.querySelector('source')?.src);
             
             function hideIntro() {
+                if (overlay.classList.contains('hidden')) return; // Уже скрыто
                 overlay.classList.add('hidden');
                 video.pause();
-                video.src = ''; // Освобождаем память
-                console.log('🎮 Intro пропущено, запуск игры');
+                video.removeAttribute('src');
+                video.load(); // Освобождаем память
+                console.log('🎮 Intro завершено, запуск игры');
             }
             
-            // Пропустить по клику в любом месте
-            overlay.addEventListener('click', hideIntro);
-            overlay.addEventListener('touchstart', hideIntro, { passive: true });
+            // Пропустить по клику/тапу
+            function skipIntro(e) {
+                e.preventDefault();
+                console.log('👆 Пользователь пропустил intro');
+                hideIntro();
+            }
+            
+            overlay.addEventListener('click', skipIntro);
+            overlay.addEventListener('touchend', skipIntro, { passive: false });
             
             // Автоматически скрыть после окончания видео
-            video.addEventListener('ended', hideIntro);
+            video.addEventListener('ended', function() {
+                console.log('🏁 Видео закончилось');
+                hideIntro();
+            });
             
             // Если видео не загрузилось - сразу к игре
             video.addEventListener('error', function(e) {
-                console.warn('⚠️ Видео не загрузилось:', e);
+                console.error('❌ Ошибка загрузки видео:', e.target?.error?.message || 'unknown');
                 hideIntro();
+            });
+            
+            // Отслеживаем прогресс загрузки
+            video.addEventListener('loadstart', function() {
+                console.log('📥 Начата загрузка видео');
+            });
+            
+            video.addEventListener('canplay', function() {
+                console.log('✅ Видео готово к воспроизведению');
+                tryPlayVideo();
             });
             
             // ФИКС: Принудительный запуск видео
             function tryPlayVideo() {
-                console.log('▶️ Попытка запустить видео');
+                if (videoStarted) return;
+                console.log('▶️ Попытка запустить видео...');
+                
                 const playPromise = video.play();
                 
                 if (playPromise !== undefined) {
                     playPromise.then(function() {
-                        console.log('✅ Видео воспроизводится');
+                        videoStarted = true;
+                        console.log('✅ Видео воспроизводится!');
                     }).catch(function(error) {
-                        console.warn('⚠️ Автовоспроизведение заблокировано:', error.name);
-                        // Видео запустится при первом клике
+                        console.warn('⚠️ Автовоспроизведение заблокировано:', error.name, error.message);
+                        // Показываем подсказку что нужен тап
+                        document.getElementById('skip-intro-hint').textContent = '👆 Нажмите чтобы начать';
                     });
                 }
             }
             
             // Пытаемся запустить при загрузке
             video.addEventListener('loadeddata', function() {
-                console.log('📼 Видео загружено');
+                console.log('📼 Данные видео загружены');
                 tryPlayVideo();
             });
             
-            // Запускаем при любом взаимодействии если не играет
-            overlay.addEventListener('touchstart', function() {
-                if (video.paused) {
-                    tryPlayVideo();
-                }
-            }, { once: true, passive: true });
-            
-            // Таймаут на случай зависания видео
+            // Таймаут на случай зависания (увеличен до 15 сек)
             setTimeout(function() {
                 if (!overlay.classList.contains('hidden')) {
-                    console.log('⏱️ Таймаут intro video (10 сек)');
+                    console.log('⏱️ Таймаут intro video (15 сек)');
                     hideIntro();
                 }
-            }, 10000); // 10 секунд максимум
+            }, 15000);
             
-            // Немедленная попытка запуска (на случай если loadeddata уже произошло)
-            setTimeout(tryPlayVideo, 100);
+            // Немедленная попытка запуска
+            setTimeout(tryPlayVideo, 500);
         })();
     </script>
 </body>
