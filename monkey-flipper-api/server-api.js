@@ -3321,18 +3321,38 @@ app.post('/api/achievements/check', async (req, res) => {
   }
   
   try {
-    // Получаем статистику
-    const statsResult = await pool.query(`
-      SELECT 
-        (SELECT COUNT(*) FROM player_scores WHERE user_id = $1) as games_played,
-        (SELECT MAX(score) FROM player_scores WHERE user_id = $1) as best_score,
-        (SELECT monkey_coin_balance FROM wallets WHERE user_id = $1) as coins,
-        (SELECT COUNT(*) FROM referrals WHERE referrer_id = $1 AND bonus_paid = true) as referrals,
-        (SELECT COUNT(*) FROM duels WHERE (player1_id = $1 OR player2_id = $1) AND winner_id = $1) as duel_wins,
-        (SELECT day_streak FROM daily_rewards WHERE user_id = $1) as streak
-    `, [userId]);
+    // Получаем статистику отдельными запросами
+    let gamesPlayed = 0, bestScore = 0, coins = 0, referrals = 0, duelWins = 0, streak = 0;
     
-    const stats = statsResult.rows[0] || {};
+    try {
+      const r1 = await pool.query('SELECT COUNT(*) as cnt FROM player_scores WHERE user_id = $1', [userId]);
+      gamesPlayed = parseInt(r1.rows[0]?.cnt) || 0;
+    } catch(e) {}
+    
+    try {
+      const r2 = await pool.query('SELECT MAX(score) as mx FROM player_scores WHERE user_id = $1', [userId]);
+      bestScore = parseInt(r2.rows[0]?.mx) || 0;
+    } catch(e) {}
+    
+    try {
+      const r3 = await pool.query('SELECT monkey_coin_balance FROM wallets WHERE user_id = $1', [userId]);
+      coins = parseInt(r3.rows[0]?.monkey_coin_balance) || 0;
+    } catch(e) {}
+    
+    try {
+      const r4 = await pool.query('SELECT COUNT(*) as cnt FROM referrals WHERE referrer_id = $1 AND bonus_paid = true', [userId]);
+      referrals = parseInt(r4.rows[0]?.cnt) || 0;
+    } catch(e) {}
+    
+    try {
+      const r5 = await pool.query('SELECT COUNT(*) as cnt FROM duels WHERE (player1_id = $1 OR player2_id = $1) AND winner_id = $1', [userId]);
+      duelWins = parseInt(r5.rows[0]?.cnt) || 0;
+    } catch(e) {}
+    
+    try {
+      const r6 = await pool.query('SELECT day_streak FROM daily_rewards WHERE user_id = $1', [userId]);
+      streak = parseInt(r6.rows[0]?.day_streak) || 0;
+    } catch(e) {}
     
     // Получаем уже разблокированные
     const unlockedResult = await pool.query(
@@ -3349,27 +3369,27 @@ app.post('/api/achievements/check', async (req, res) => {
       
       let shouldUnlock = false;
       
-      if (ach.id === 'first_game' && parseInt(stats.games_played) >= 1) shouldUnlock = true;
-      else if (ach.id === 'score_100' && parseInt(stats.best_score) >= 100) shouldUnlock = true;
-      else if (ach.id === 'score_500' && parseInt(stats.best_score) >= 500) shouldUnlock = true;
-      else if (ach.id === 'score_1000' && parseInt(stats.best_score) >= 1000) shouldUnlock = true;
-      else if (ach.id === 'score_2000' && parseInt(stats.best_score) >= 2000) shouldUnlock = true;
-      else if (ach.id === 'score_5000' && parseInt(stats.best_score) >= 5000) shouldUnlock = true;
-      else if (ach.id === 'games_10' && parseInt(stats.games_played) >= 10) shouldUnlock = true;
-      else if (ach.id === 'games_50' && parseInt(stats.games_played) >= 50) shouldUnlock = true;
-      else if (ach.id === 'games_100' && parseInt(stats.games_played) >= 100) shouldUnlock = true;
-      else if (ach.id === 'games_500' && parseInt(stats.games_played) >= 500) shouldUnlock = true;
-      else if (ach.id === 'first_referral' && parseInt(stats.referrals) >= 1) shouldUnlock = true;
-      else if (ach.id === 'referrals_5' && parseInt(stats.referrals) >= 5) shouldUnlock = true;
-      else if (ach.id === 'referrals_10' && parseInt(stats.referrals) >= 10) shouldUnlock = true;
-      else if (ach.id === 'coins_1000' && parseInt(stats.coins) >= 1000) shouldUnlock = true;
-      else if (ach.id === 'coins_10000' && parseInt(stats.coins) >= 10000) shouldUnlock = true;
-      else if (ach.id === 'coins_100000' && parseInt(stats.coins) >= 100000) shouldUnlock = true;
-      else if (ach.id === 'first_duel_win' && parseInt(stats.duel_wins) >= 1) shouldUnlock = true;
-      else if (ach.id === 'duel_wins_10' && parseInt(stats.duel_wins) >= 10) shouldUnlock = true;
-      else if (ach.id === 'duel_wins_50' && parseInt(stats.duel_wins) >= 50) shouldUnlock = true;
-      else if (ach.id === 'streak_7' && parseInt(stats.streak) >= 7) shouldUnlock = true;
-      else if (ach.id === 'streak_30' && parseInt(stats.streak) >= 30) shouldUnlock = true;
+      if (ach.id === 'first_game' && gamesPlayed >= 1) shouldUnlock = true;
+      else if (ach.id === 'score_100' && bestScore >= 100) shouldUnlock = true;
+      else if (ach.id === 'score_500' && bestScore >= 500) shouldUnlock = true;
+      else if (ach.id === 'score_1000' && bestScore >= 1000) shouldUnlock = true;
+      else if (ach.id === 'score_2000' && bestScore >= 2000) shouldUnlock = true;
+      else if (ach.id === 'score_5000' && bestScore >= 5000) shouldUnlock = true;
+      else if (ach.id === 'games_10' && gamesPlayed >= 10) shouldUnlock = true;
+      else if (ach.id === 'games_50' && gamesPlayed >= 50) shouldUnlock = true;
+      else if (ach.id === 'games_100' && gamesPlayed >= 100) shouldUnlock = true;
+      else if (ach.id === 'games_500' && gamesPlayed >= 500) shouldUnlock = true;
+      else if (ach.id === 'first_referral' && referrals >= 1) shouldUnlock = true;
+      else if (ach.id === 'referrals_5' && referrals >= 5) shouldUnlock = true;
+      else if (ach.id === 'referrals_10' && referrals >= 10) shouldUnlock = true;
+      else if (ach.id === 'coins_1000' && coins >= 1000) shouldUnlock = true;
+      else if (ach.id === 'coins_10000' && coins >= 10000) shouldUnlock = true;
+      else if (ach.id === 'coins_100000' && coins >= 100000) shouldUnlock = true;
+      else if (ach.id === 'first_duel_win' && duelWins >= 1) shouldUnlock = true;
+      else if (ach.id === 'duel_wins_10' && duelWins >= 10) shouldUnlock = true;
+      else if (ach.id === 'duel_wins_50' && duelWins >= 50) shouldUnlock = true;
+      else if (ach.id === 'streak_7' && streak >= 7) shouldUnlock = true;
+      else if (ach.id === 'streak_30' && streak >= 30) shouldUnlock = true;
       
       if (shouldUnlock) {
         await pool.query(
@@ -3387,8 +3407,8 @@ app.post('/api/achievements/check', async (req, res) => {
       count: newlyUnlocked.length
     });
   } catch (err) {
-    console.error('Check achievements error:', err);
-    res.status(500).json({ success: false, error: 'DB error' });
+    console.error('Check achievements error:', err.message);
+    res.status(500).json({ success: false, error: 'DB error', details: err.message });
   }
 });
 
