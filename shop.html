@@ -797,6 +797,7 @@
                 });
 
                 const data = await response.json();
+                console.log('🛒 Shop response:', data);
                 
                 if (data.success) {
                     if (data.transaction) {
@@ -826,38 +827,68 @@
                         // Открываем инвойс через Telegram WebApp API
                         if (tg?.openInvoice) {
                             console.log('📋 Calling tg.openInvoice with:', invoiceUrl);
-                            tg.openInvoice(invoiceUrl, async (status) => {
-                                console.log('Invoice status:', status);
-                                
-                                if (status === 'paid') {
-                                    // Успешная оплата!
-                                    if (tg?.HapticFeedback) {
-                                        tg.HapticFeedback.notificationOccurred('success');
-                                    }
+                            try {
+                                tg.openInvoice(invoiceUrl, async (status) => {
+                                    console.log('Invoice status:', status);
                                     
-                                    modalContent.innerHTML = `
-                                        <div style="text-align: center; padding: 30px;">
-                                            <div style="font-size: 64px; margin-bottom: 20px;">🎉</div>
-                                            <h2>Покупка успешна!</h2>
-                                            <p style="margin: 15px 0;">${selectedItem.name}</p>
-                                            <p style="opacity: 0.8;">Оплачено: ${selectedItem.priceXTR} ⭐</p>
-                                            <button class="modal-button buy" onclick="closeModal(); loadPurchases(); loadBalance();" style="margin-top: 20px; width: 100%;">Отлично!</button>
-                                        </div>
-                                    `;
-                                } else if (status === 'cancelled') {
-                                    closeModal();
-                                } else {
-                                    // pending или failed
-                                    modalContent.innerHTML = `
-                                        <div style="text-align: center; padding: 30px;">
-                                            <div style="font-size: 64px; margin-bottom: 20px;">⚠️</div>
-                                            <h2>Оплата не завершена</h2>
-                                            <p style="margin: 15px 0;">Статус: ${status}</p>
-                                            <button class="modal-button cancel" onclick="closeModal()" style="margin-top: 20px; width: 100%;">Закрыть</button>
-                                        </div>
-                                    `;
-                                }
-                            });
+                                    if (status === 'paid') {
+                                        // Успешная оплата!
+                                        if (tg?.HapticFeedback) {
+                                            tg.HapticFeedback.notificationOccurred('success');
+                                        }
+                                        
+                                        modalContent.innerHTML = `
+                                            <div style="text-align: center; padding: 30px;">
+                                                <div style="font-size: 64px; margin-bottom: 20px;">🎉</div>
+                                                <h2>Покупка успешна!</h2>
+                                                <p style="margin: 15px 0;">${selectedItem.name}</p>
+                                                <p style="opacity: 0.8;">Оплачено: ${selectedItem.priceXTR} ⭐</p>
+                                                <button class="modal-button buy" onclick="closeModal(); loadPurchases(); loadBalance();" style="margin-top: 20px; width: 100%;">Отлично!</button>
+                                            </div>
+                                        `;
+                                    } else if (status === 'cancelled') {
+                                        // Пользователь отменил или ошибка URL
+                                        modalContent.innerHTML = `
+                                            <div style="text-align: center; padding: 30px;">
+                                                <div style="font-size: 64px; margin-bottom: 20px;">❌</div>
+                                                <h2>Оплата отменена</h2>
+                                                <p style="margin: 15px 0; opacity: 0.8;">Вы отменили оплату или произошла ошибка</p>
+                                                <button class="modal-button cancel" onclick="closeModal()" style="margin-top: 20px; width: 100%;">Закрыть</button>
+                                            </div>
+                                        `;
+                                    } else if (status === 'failed') {
+                                        modalContent.innerHTML = `
+                                            <div style="text-align: center; padding: 30px;">
+                                                <div style="font-size: 64px; margin-bottom: 20px;">⚠️</div>
+                                                <h2>Ошибка оплаты</h2>
+                                                <p style="margin: 15px 0;">Статус: ${status}</p>
+                                                <button class="modal-button cancel" onclick="closeModal()" style="margin-top: 20px; width: 100%;">Закрыть</button>
+                                            </div>
+                                        `;
+                                    } else {
+                                        // pending или другой статус
+                                        modalContent.innerHTML = `
+                                            <div style="text-align: center; padding: 30px;">
+                                                <div style="font-size: 64px; margin-bottom: 20px;">⏳</div>
+                                                <h2>Обрабатывается...</h2>
+                                                <p style="margin: 15px 0;">Статус: ${status}</p>
+                                                <button class="modal-button cancel" onclick="closeModal()" style="margin-top: 20px; width: 100%;">Закрыть</button>
+                                            </div>
+                                        `;
+                                    }
+                                });
+                            } catch (invoiceError) {
+                                console.error('❌ openInvoice error:', invoiceError);
+                                modalContent.innerHTML = `
+                                    <div style="text-align: center; padding: 30px;">
+                                        <div style="font-size: 64px; margin-bottom: 20px;">❌</div>
+                                        <h2>Ошибка открытия оплаты</h2>
+                                        <p style="margin: 15px 0; color: #ff6b6b;">${invoiceError.message || 'Неизвестная ошибка'}</p>
+                                        <p style="font-size: 12px; word-break: break-all; opacity: 0.6;">URL: ${invoiceUrl}</p>
+                                        <button class="modal-button cancel" onclick="closeModal()" style="margin-top: 20px; width: 100%;">Закрыть</button>
+                                    </div>
+                                `;
+                            }
                         } else {
                             // Fallback если openInvoice недоступен
                             window.open(data.invoice, '_blank');
