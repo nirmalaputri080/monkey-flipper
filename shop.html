@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Магазин - Monkey Flipper</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- TON Connect UI SDK - загружаем в head -->
+    <script src="https://unpkg.com/@tonconnect/ui@2.0.6/dist/tonconnect-ui.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -814,8 +816,11 @@
         // Обработка TON платежа
         async function handleTonPayment(transaction, transactionId, item, modalContent) {
             try {
+                // Получаем класс TonConnectUI
+                const TonConnectUIClass = window.TON_CONNECT_UI?.TonConnectUI || window.TonConnectUI;
+                
                 // Проверяем наличие TON Connect UI
-                if (typeof window.TonConnectUI === 'undefined') {
+                if (!TonConnectUIClass) {
                     // TON Connect не загружен - показываем инструкцию
                     modalContent.innerHTML = `
                         <div style="text-align: center; padding: 30px;">
@@ -838,7 +843,7 @@
 
                 // Инициализируем TON Connect если ещё не сделано
                 if (!tonConnectUI) {
-                    tonConnectUI = new window.TonConnectUI({
+                    tonConnectUI = new TonConnectUIClass({
                         manifestUrl: 'https://monkey-flipper-djm1.onrender.com/tonconnect-manifest.json',
                         buttonRootId: null
                     });
@@ -927,13 +932,16 @@
         // Подключение TON кошелька из магазина
         async function connectTonWallet() {
             try {
-                if (!tonConnectUI) {
-                    tonConnectUI = new window.TonConnectUI({
+                const TonConnectUIClass = window.TON_CONNECT_UI?.TonConnectUI || window.TonConnectUI;
+                if (!tonConnectUI && TonConnectUIClass) {
+                    tonConnectUI = new TonConnectUIClass({
                         manifestUrl: 'https://monkey-flipper-djm1.onrender.com/tonconnect-manifest.json',
                         buttonRootId: null
                     });
                 }
-                await tonConnectUI.connectWallet();
+                if (tonConnectUI) {
+                    await tonConnectUI.connectWallet();
+                }
                 closeModal();
             } catch (error) {
                 console.error('Connect wallet error:', error);
@@ -950,8 +958,5 @@
         // Запуск при загрузке
         init();
     </script>
-    
-    <!-- TON Connect UI SDK -->
-    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
 </body>
 </html>
