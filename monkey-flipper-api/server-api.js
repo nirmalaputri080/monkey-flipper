@@ -22,6 +22,7 @@ const ALLOWED_ORIGINS = [
   'https://t.me',
   'https://web.telegram.org',
   'https://monkey-flipper-test-key-1.vercel.app',
+  'https://monkey-flipper-djm1.onrender.com',  // Render API (same-origin для admin)
   process.env.FRONTEND_URL || 'http://localhost:3000'
 ].filter(Boolean);
 
