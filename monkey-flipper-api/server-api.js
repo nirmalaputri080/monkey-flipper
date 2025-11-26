@@ -3185,6 +3185,18 @@ app.get('/api/achievements/:userId', async (req, res) => {
   const { userId } = req.params;
   
   try {
+    // Сначала убедимся что таблица существует
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_achievements (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR(255) NOT NULL,
+        achievement_id VARCHAR(50) NOT NULL,
+        unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        claimed BOOLEAN DEFAULT FALSE,
+        UNIQUE(user_id, achievement_id)
+      )
+    `);
+    
     // Получаем разблокированные достижения
     const unlockedResult = await pool.query(
       'SELECT achievement_id, unlocked_at, claimed FROM user_achievements WHERE user_id = $1',
@@ -3199,18 +3211,40 @@ app.get('/api/achievements/:userId', async (req, res) => {
       };
     });
     
-    // Получаем статистику пользователя для прогресса
-    const statsResult = await pool.query(`
-      SELECT 
-        (SELECT COUNT(*) FROM player_scores WHERE user_id = $1) as games_played,
-        (SELECT MAX(score) FROM player_scores WHERE user_id = $1) as best_score,
-        (SELECT monkey_coin_balance FROM wallets WHERE user_id = $1) as coins,
-        (SELECT COUNT(*) FROM referrals WHERE referrer_id = $1 AND bonus_paid = true) as referrals,
-        (SELECT COUNT(*) FROM duels WHERE (player1_id = $1 OR player2_id = $1) AND winner_id = $1) as duel_wins,
-        (SELECT day_streak FROM daily_rewards WHERE user_id = $1) as streak
-    `, [userId]);
+    // Получаем статистику пользователя для прогресса (отдельными запросами для надёжности)
+    let gamesPlayed = 0, bestScore = 0, coins = 0, referrals = 0, duelWins = 0, streak = 0;
     
-    const stats = statsResult.rows[0] || {};
+    try {
+      const r1 = await pool.query('SELECT COUNT(*) as cnt FROM player_scores WHERE user_id = $1', [userId]);
+      gamesPlayed = parseInt(r1.rows[0]?.cnt) || 0;
+    } catch(e) { console.error('Stats error games:', e.message); }
+    
+    try {
+      const r2 = await pool.query('SELECT MAX(score) as mx FROM player_scores WHERE user_id = $1', [userId]);
+      bestScore = parseInt(r2.rows[0]?.mx) || 0;
+    } catch(e) { console.error('Stats error score:', e.message); }
+    
+    try {
+      const r3 = await pool.query('SELECT monkey_coin_balance FROM wallets WHERE user_id = $1', [userId]);
+      coins = parseInt(r3.rows[0]?.monkey_coin_balance) || 0;
+    } catch(e) { console.error('Stats error coins:', e.message); }
+    
+    try {
+      const r4 = await pool.query('SELECT COUNT(*) as cnt FROM referrals WHERE referrer_id = $1 AND bonus_paid = true', [userId]);
+      referrals = parseInt(r4.rows[0]?.cnt) || 0;
+    } catch(e) { console.error('Stats error referrals:', e.message); }
+    
+    try {
+      const r5 = await pool.query('SELECT COUNT(*) as cnt FROM duels WHERE (player1_id = $1 OR player2_id = $1) AND winner_id = $1', [userId]);
+      duelWins = parseInt(r5.rows[0]?.cnt) || 0;
+    } catch(e) { console.error('Stats error duels:', e.message); }
+    
+    try {
+      const r6 = await pool.query('SELECT day_streak FROM daily_rewards WHERE user_id = $1', [userId]);
+      streak = parseInt(r6.rows[0]?.day_streak) || 0;
+    } catch(e) { console.error('Stats error streak:', e.message); }
+    
+    const stats = { games_played: gamesPlayed, best_score: bestScore, coins, referrals, duel_wins: duelWins, streak };
     
     // Формируем ответ с прогрессом
     const achievements = ACHIEVEMENTS.map(ach => {
@@ -3220,29 +3254,29 @@ app.get('/api/achievements/:userId', async (req, res) => {
       
       // Вычисляем прогресс в зависимости от типа достижения
       if (ach.id === 'first_game') {
-        progress = Math.min(parseInt(stats.games_played) || 0, 1);
+        progress = Math.min(stats.games_played, 1);
       } else if (ach.id.startsWith('score_')) {
         target = parseInt(ach.id.split('_')[1]);
-        progress = Math.min(parseInt(stats.best_score) || 0, target);
+        progress = Math.min(stats.best_score, target);
       } else if (ach.id.startsWith('games_')) {
         target = parseInt(ach.id.split('_')[1]);
-        progress = Math.min(parseInt(stats.games_played) || 0, target);
+        progress = Math.min(stats.games_played, target);
       } else if (ach.id === 'first_referral') {
-        progress = Math.min(parseInt(stats.referrals) || 0, 1);
+        progress = Math.min(stats.referrals, 1);
       } else if (ach.id.startsWith('referrals_')) {
         target = parseInt(ach.id.split('_')[1]);
-        progress = Math.min(parseInt(stats.referrals) || 0, target);
+        progress = Math.min(stats.referrals, target);
       } else if (ach.id.startsWith('coins_')) {
         target = parseInt(ach.id.split('_')[1]);
-        progress = Math.min(parseInt(stats.coins) || 0, target);
+        progress = Math.min(stats.coins, target);
       } else if (ach.id === 'first_duel_win') {
-        progress = Math.min(parseInt(stats.duel_wins) || 0, 1);
+        progress = Math.min(stats.duel_wins, 1);
       } else if (ach.id.startsWith('duel_wins_')) {
         target = parseInt(ach.id.split('_')[1]);
-        progress = Math.min(parseInt(stats.duel_wins) || 0, target);
+        progress = Math.min(stats.duel_wins, target);
       } else if (ach.id.startsWith('streak_')) {
         target = parseInt(ach.id.split('_')[1]);
-        progress = Math.min(parseInt(stats.streak) || 0, target);
+        progress = Math.min(stats.streak, target);
       }
       
       return {
