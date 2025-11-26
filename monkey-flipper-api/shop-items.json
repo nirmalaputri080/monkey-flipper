@@ -29,9 +29,9 @@
       "name": "Ninja Monkey Skin",
       "description": "Стелс скин ниндзя",
       "category": "skins",
-      "priceXTR": 2,
-      "priceTON": 0.2,
-      "priceCoins": 500,
+      "priceXTR": 1,
+      "priceTON": 0.1,
+      "priceCoins": 100,
       "currency": "both",
       "rarity": "rare",
       "image": "/assets/skins/ninja_monkey.png"
