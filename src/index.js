@@ -4950,8 +4950,9 @@ class WalletScene extends Phaser.Scene {
             }
 
             // Создаём экземпляр TON Connect UI
+            // Манифест хостится на API сервере
             this.tonConnectUI = new TonConnectUIClass({
-                manifestUrl: 'https://monkey-flipper.vercel.app/tonconnect-manifest.json',
+                manifestUrl: 'https://monkey-flipper-djm1.onrender.com/tonconnect-manifest.json',
                 buttonRootId: null // Мы не используем встроенную кнопку
             });
 

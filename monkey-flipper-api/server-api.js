@@ -2655,10 +2655,25 @@ app.get('/api/shop/items', async (req, res) => {
   }
 });
 
+// ==================== TON CONNECT MANIFEST ====================
+// Манифест для TON Connect - позволяет подключать TON кошельки
+app.get('/tonconnect-manifest.json', (req, res) => {
+  const manifest = {
+    url: "https://monkey-flipper-djm1.onrender.com",
+    name: "Monkey Flipper",
+    iconUrl: "https://monkey-flipper-djm1.onrender.com/assets/icon-512.png"
+  };
+  
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.json(manifest);
+});
+
 app.listen(PORT, () => {
   console.log(`API server listening on ${PORT}`);
   console.log(`💰 Игровые STARS: Включены (виртуальная валюта)`);
   console.log(`⭐ Telegram Stars (XTR): Включены (реальные платежи)`);
   console.log(`📹 Intro Video API: /api/send-intro-video`);
+  console.log(`🔗 TON Connect manifest: /tonconnect-manifest.json`);
 });
 
