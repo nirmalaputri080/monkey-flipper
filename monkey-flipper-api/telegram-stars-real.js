@@ -7,9 +7,9 @@ require('dotenv').config(); // Загружаем переменные окру�
 const TelegramBot = require('node-telegram-bot-api');
 
 // Инициализация бота с токеном
-// polling будет включен только если установлен BOT_TOKEN и ENABLE_BOT_POLLING=true
+// polling включается автоматически если есть BOT_TOKEN (можно отключить через ENABLE_BOT_POLLING=false)
 const botToken = process.env.BOT_TOKEN || '';
-const enablePolling = process.env.ENABLE_BOT_POLLING === 'true' && !!botToken;
+const enablePolling = process.env.ENABLE_BOT_POLLING !== 'false' && !!botToken;
 
 console.log('🔍 Telegram Bot Config:', {
   hasToken: !!botToken,
