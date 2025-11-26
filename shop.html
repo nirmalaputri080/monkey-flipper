@@ -301,12 +301,12 @@
 
     <div class="balance-section">
         <div class="balance-card">
-            <div class="label">Monkey Coins</div>
+            <div class="label">🪙 Monkey Coins</div>
             <div class="amount" id="coinsBalance">...</div>
         </div>
         <div class="balance-card">
-            <div class="label">STARS</div>
-            <div class="amount" id="starsBalance">...</div>
+            <div class="label">⭐ Telegram Stars</div>
+            <div class="amount" id="starsBalance">в Telegram</div>
         </div>
     </div>
 
@@ -346,10 +346,6 @@
                     <button class="payment-button" id="payCoins" onclick="selectPayment('coins')" style="display: none;">
                         <span><span class="icon">🪙</span> Monkey Coins</span>
                         <span class="price" id="priceCoins">0</span>
-                    </button>
-                    <button class="payment-button" id="payStars" onclick="selectPayment('stars')" style="display: none;">
-                        <span><span class="icon">💰</span> STARS (игровые)</span>
-                        <span class="price" id="priceStars">0</span>
                     </button>
                     <button class="payment-button" id="payXTR" onclick="selectPayment('xtr')" style="display: none;">
                         <span><span class="icon">⭐</span> Telegram Stars</span>
@@ -456,21 +452,19 @@
         // Загрузка баланса
         async function loadBalance() {
             try {
-                // Используем существующий endpoint /api/wallet/:userId
-                const response = await fetch(`${API_URL}/api/wallet/${userId}`, {
+                // Используем существующий endpoint /api/wallet/balance/:userId
+                const response = await fetch(`${API_URL}/api/wallet/balance/${userId}`, {
                     headers: { 'Authorization': `Bearer ${jwt}` }
                 });
 
                 const data = await response.json();
                 if (data.success && data.wallet) {
                     document.getElementById('coinsBalance').textContent = (data.wallet.monkeyCoin || 0).toLocaleString();
-                    document.getElementById('starsBalance').textContent = (parseFloat(data.wallet.stars) || 0).toLocaleString();
+                    // Telegram Stars баланс хранится в Telegram, не в нашей БД
                 }
             } catch (error) {
                 console.error('❌ Ошибка загрузки баланса:', error);
-                // Устанавливаем 0 при ошибке
                 document.getElementById('coinsBalance').textContent = '0';
-                document.getElementById('starsBalance').textContent = '0';
             }
         }
 
@@ -537,23 +531,20 @@
                     // Если куплено - показываем статус
                     priceHtml = `<div class="price" style="background: #4CAF50; color: white; font-weight: bold;">✅ КУПЛЕНО</div>`;
                 } else {
-                    // Показываем разные варианты оплаты
-                    if (item.currency === 'both') {
+                    // Показываем варианты оплаты: Coins и Telegram Stars
+                    if (item.currency === 'both' || item.priceXTR) {
                         priceHtml = `
                             <div class="price coins" style="margin-bottom: 5px">
-                                🪙 ${item.priceCoins || item.priceStars * 20} Coins
-                            </div>
-                            <div class="price stars" style="margin-bottom: 5px">
-                                💰 ${item.priceStars} STARS
+                                🪙 ${item.priceCoins || 0} Coins
                             </div>
                             <div class="price" style="background: linear-gradient(135deg, #667eea, #764ba2); color: #fff">
-                                ⭐ ${item.priceXTR} XTR
+                                ⭐ ${item.priceXTR || 0} Stars
                             </div>
                         `;
                     } else if (item.currency === 'coins') {
                         priceHtml = `<div class="price coins">🪙 ${item.priceCoins}</div>`;
-                    } else {
-                        priceHtml = `<div class="price stars">💰 ${item.priceStars || item.price} STARS</div>`;
+                    } else if (item.currency === 'xtr') {
+                        priceHtml = `<div class="price" style="background: linear-gradient(135deg, #667eea, #764ba2); color: #fff">⭐ ${item.priceXTR} Stars</div>`;
                     }
                 }
                 
@@ -597,14 +588,10 @@
                 document.getElementById('singlePaymentSection').style.display = 'none';
                 document.getElementById('multiPaymentSection').style.display = 'block';
                 
-                // Настраиваем кнопки оплаты
+                // Настраиваем кнопки оплаты: только Coins и Telegram Stars
                 if (selectedItem.priceCoins) {
                     document.getElementById('payCoins').style.display = 'flex';
                     document.getElementById('priceCoins').textContent = `${selectedItem.priceCoins} 🪙`;
-                }
-                if (selectedItem.priceStars) {
-                    document.getElementById('payStars').style.display = 'flex';
-                    document.getElementById('priceStars').textContent = `${selectedItem.priceStars} 💰`;
                 }
                 if (selectedItem.priceXTR) {
                     document.getElementById('payXTR').style.display = 'flex';
@@ -651,9 +638,8 @@
             selectedItem = null;
             selectedPaymentMethod = null;
             
-            // Скрываем все кнопки оплаты
+            // Скрываем кнопки оплаты
             document.getElementById('payCoins').style.display = 'none';
-            document.getElementById('payStars').style.display = 'none';
             document.getElementById('payXTR').style.display = 'none';
         }
         
@@ -685,14 +671,14 @@
             try {
                 let endpoint, body;
                 
-                if (selectedPaymentMethod === 'xtr' || (selectedItem.currency === 'xtr')) {
+                if (selectedPaymentMethod === 'xtr' || selectedItem.currency === 'xtr') {
                     // Покупка за Telegram Stars (XTR) - создаем инвойс
                     endpoint = '/api/shop/create-stars-invoice';
                     body = {
                         userId: userId,
                         itemId: selectedItem.id
                     };
-                } else if (selectedPaymentMethod === 'coins' || selectedItem.currency === 'coins') {
+                } else {
                     // Покупка за Monkey Coins
                     endpoint = '/api/shop/purchase';
                     body = {
@@ -701,16 +687,6 @@
                         itemName: selectedItem.name,
                         price: selectedItem.priceCoins,
                         category: selectedItem.category
-                    };
-                } else {
-                    // Покупка за игровые STARS
-                    endpoint = '/api/shop/purchase-stars';
-                    body = {
-                        userId: userId,
-                        itemId: selectedItem.id,
-                        itemName: selectedItem.name,
-                        priceStars: selectedItem.priceStars,
-                        signature: 'client_signature_placeholder'
                     };
                 }
 
