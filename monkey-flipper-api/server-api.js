@@ -657,6 +657,110 @@ app.get('/api/leaderboard', async (req, res) => {
   }
 });
 
+// ==================== PLAYER STATS ENDPOINT ====================
+
+// Получить полную статистику игрока
+app.get('/api/stats/:userId', async (req, res) => {
+  const { userId } = req.params;
+  
+  if (!userId) {
+    return res.status(400).json({ success: false, error: 'userId required' });
+  }
+
+  try {
+    // Статистика по играм
+    const gamesStats = await pool.query(`
+      SELECT 
+        COUNT(*) as total_games,
+        COALESCE(MAX(score), 0) as best_score,
+        COALESCE(AVG(score)::int, 0) as avg_score,
+        COALESCE(SUM(score), 0) as total_score,
+        MIN(timestamp) as first_game,
+        MAX(timestamp) as last_game
+      FROM player_scores 
+      WHERE user_id = $1
+    `, [userId]);
+
+    // Статистика по дуэлям
+    const duelsStats = await pool.query(`
+      SELECT 
+        COUNT(*) FILTER (WHERE status = 'completed') as total_duels,
+        COUNT(*) FILTER (WHERE winner = $1) as duels_won,
+        COUNT(*) FILTER (WHERE status = 'completed' AND winner != $1 AND winner IS NOT NULL) as duels_lost
+      FROM duels 
+      WHERE player1_id = $1 OR player2_id = $1
+    `, [userId]);
+
+    // Баланс кошелька
+    const walletData = await pool.query(`
+      SELECT monkey_coin_balance, stars_balance, ton_balance
+      FROM wallets 
+      WHERE user_id = $1
+    `, [userId]);
+
+    // Количество покупок
+    const purchasesData = await pool.query(`
+      SELECT COUNT(*) as total_purchases
+      FROM purchases 
+      WHERE user_id = $1
+    `, [userId]);
+
+    // Позиция в рейтинге
+    const rankData = await pool.query(`
+      WITH best_scores AS (
+        SELECT DISTINCT ON (user_id) user_id, score
+        FROM player_scores
+        ORDER BY user_id, score DESC
+      ),
+      ranked AS (
+        SELECT user_id, score, RANK() OVER (ORDER BY score DESC) as rank
+        FROM best_scores
+      )
+      SELECT rank, score FROM ranked WHERE user_id = $1
+    `, [userId]);
+
+    const games = gamesStats.rows[0];
+    const duels = duelsStats.rows[0];
+    const wallet = walletData.rows[0] || { monkey_coin_balance: 0, stars_balance: 0, ton_balance: 0 };
+    const purchases = purchasesData.rows[0];
+    const rank = rankData.rows[0] || { rank: '-', score: 0 };
+
+    return res.json({
+      success: true,
+      stats: {
+        // Игры
+        totalGames: parseInt(games.total_games) || 0,
+        bestScore: parseInt(games.best_score) || 0,
+        avgScore: parseInt(games.avg_score) || 0,
+        totalScore: parseInt(games.total_score) || 0,
+        firstGame: games.first_game,
+        lastGame: games.last_game,
+        
+        // Дуэли
+        totalDuels: parseInt(duels.total_duels) || 0,
+        duelsWon: parseInt(duels.duels_won) || 0,
+        duelsLost: parseInt(duels.duels_lost) || 0,
+        winRate: duels.total_duels > 0 
+          ? Math.round((duels.duels_won / duels.total_duels) * 100) 
+          : 0,
+        
+        // Кошелёк
+        monkeyCoins: parseInt(wallet.monkey_coin_balance) || 0,
+        stars: parseFloat(wallet.stars_balance) || 0,
+        ton: parseFloat(wallet.ton_balance) || 0,
+        
+        // Прочее
+        totalPurchases: parseInt(purchases.total_purchases) || 0,
+        rank: rank.rank,
+        rankScore: parseInt(rank.score) || 0
+      }
+    });
+  } catch (err) {
+    console.error('Stats error:', err);
+    return res.status(500).json({ success: false, error: 'DB error' });
+  }
+});
+
 // ==================== DUEL ENDPOINTS ====================
 
 // Создать вызов на дуэль
