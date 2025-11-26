@@ -51,6 +51,9 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// Раздача статических файлов (admin-stats.html и др.)
+app.use(express.static(__dirname));
+
 // PostgreSQL connection
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
