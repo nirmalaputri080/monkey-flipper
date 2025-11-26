@@ -1320,15 +1320,17 @@ app.get('/api/shop/purchases/:userId', async (req, res) => {
   
   try {
     // Группируем по item_id и считаем количество доступных предметов
+    // ВАЖНО: Показываем и 'active' и 'equipped' предметы (но НЕ 'used')
     const result = await pool.query(`
       SELECT 
         item_id, 
         item_name, 
         MIN(price) as price, 
-        COUNT(*) as count,
+        COUNT(*) FILTER (WHERE status = 'active') as count,
+        COUNT(*) FILTER (WHERE status = 'equipped') as equipped_count,
         MAX(purchased_at) as purchased_at
       FROM purchases
-      WHERE user_id = $1 AND status = 'active'
+      WHERE user_id = $1 AND status IN ('active', 'equipped')
       GROUP BY item_id, item_name
       ORDER BY purchased_at DESC
     `, [userId]);

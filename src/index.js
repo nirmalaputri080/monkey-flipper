@@ -4506,25 +4506,30 @@ class InventoryScene extends Phaser.Scene {
         this.background = this.add.image(0, 0, 'background_img_menu').setOrigin(0, 0);
         this.background.setDisplaySize(CONSTS.WIDTH, CONSTS.HEIGHT);
 
-        // Заголовок
+        // Заголовок - улучшенный стиль как в меню
         this.add.text(CONSTS.WIDTH / 2, 50, '🎒 Инвентарь', {
-            fontSize: '32px',
-            fill: '#FFF',
-            fontStyle: 'bold'
+            fontSize: '28px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial Black',
+            stroke: '#000000',
+            strokeThickness: 4
         }).setOrigin(0.5);
 
         // Загружаем данные
         const userData = getTelegramUserId();
         await this.loadInventory(userData.id);
 
-        // Кнопка назад
+        // Кнопка назад - улучшенный стиль
         const backBtn = this.add.graphics();
-        backBtn.fillStyle(0xFF0000, 1);
+        backBtn.fillStyle(0xFF4444, 1);
         backBtn.fillRoundedRect(20, CONSTS.HEIGHT - 70, 120, 50, 8);
         
         const backText = this.add.text(80, CONSTS.HEIGHT - 45, 'Назад', {
-            fontSize: '20px',
-            fill: '#FFF'
+            fontSize: '18px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial Black',
+            stroke: '#000000',
+            strokeThickness: 2
         }).setOrigin(0.5);
 
         const backZone = this.add.rectangle(80, CONSTS.HEIGHT - 45, 120, 50, 0x000000, 0)
@@ -4564,67 +4569,89 @@ class InventoryScene extends Phaser.Scene {
     displayItems() {
         if (this.purchases.length === 0) {
             this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2, 'Инвентарь пуст\n\nПокупайте предметы в магазине!', {
-                fontSize: '20px',
-                fill: '#FFF',
-                align: 'center'
+                fontSize: '18px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial',
+                align: 'center',
+                stroke: '#000000',
+                strokeThickness: 2
             }).setOrigin(0.5);
             return;
         }
 
         const startY = 120;
-        const itemHeight = 80;
+        const itemHeight = 85;
 
         this.purchases.forEach((item, index) => {
             const y = startY + (index * itemHeight);
             const isEquipped = Object.values(this.equipped).includes(item.item_id);
+            
+            // Подсчитываем общее количество (active + equipped)
+            const activeCount = parseInt(item.count) || 0;
+            const equippedCount = parseInt(item.equipped_count) || 0;
+            const totalCount = activeCount + equippedCount;
 
-            // Фон предмета
+            // Фон предмета с обводкой
             const bg = this.add.graphics();
-            bg.fillStyle(isEquipped ? 0x4CAF50 : 0x333333, 0.8);
-            bg.fillRoundedRect(20, y, CONSTS.WIDTH - 40, 70, 10);
+            bg.fillStyle(isEquipped ? 0x4CAF50 : 0x2a2a2a, 0.9);
+            bg.fillRoundedRect(20, y, CONSTS.WIDTH - 40, 75, 12);
+            bg.lineStyle(2, isEquipped ? 0x81C784 : 0x444444, 1);
+            bg.strokeRoundedRect(20, y, CONSTS.WIDTH - 40, 75, 12);
 
-            // Название с количеством
-            const countText = item.count > 1 ? ` x${item.count}` : '';
-            this.add.text(40, y + 15, item.item_name + countText, {
-                fontSize: '18px',
-                fill: '#FFF',
-                fontStyle: 'bold'
+            // Название с количеством - улучшенный стиль
+            const countText = totalCount > 1 ? ` x${totalCount}` : '';
+            this.add.text(35, y + 12, item.item_name + countText, {
+                fontSize: '16px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial',
+                fontStyle: 'bold',
+                stroke: '#000000',
+                strokeThickness: 1
             });
 
-            // Статус
-            const statusText = isEquipped ? '✅ ЭКИПИРОВАНО' : 'Нажмите для экипировки';
-            this.add.text(40, y + 45, statusText, {
-                fontSize: '14px',
-                fill: isEquipped ? '#90EE90' : '#AAA'
+            // Статус - улучшенный стиль
+            const statusText = isEquipped ? '✅ ЭКИПИРОВАНО' : '📦 В инвентаре';
+            this.add.text(35, y + 38, statusText, {
+                fontSize: '13px',
+                fill: isEquipped ? '#90EE90' : '#BBBBBB',
+                fontFamily: 'Arial'
             });
 
-            // Кнопки справа
+            // Кнопки справа - улучшенный стиль
             if (isEquipped) {
                 // Кнопка "Снять" для экипированных предметов
                 const unequipBtn = this.add.graphics();
                 unequipBtn.fillStyle(0xFF5722, 1);
-                unequipBtn.fillRoundedRect(CONSTS.WIDTH - 140, y + 15, 110, 40, 8);
+                unequipBtn.fillRoundedRect(CONSTS.WIDTH - 130, y + 18, 100, 38, 8);
 
-                this.add.text(CONSTS.WIDTH - 85, y + 35, 'Снять', {
+                this.add.text(CONSTS.WIDTH - 80, y + 37, 'Снять', {
                     fontSize: '14px',
-                    fill: '#FFF'
+                    fill: '#FFFFFF',
+                    fontFamily: 'Arial',
+                    fontStyle: 'bold',
+                    stroke: '#000000',
+                    strokeThickness: 1
                 }).setOrigin(0.5);
 
-                const unequipZone = this.add.rectangle(CONSTS.WIDTH - 85, y + 35, 110, 40, 0x000000, 0)
+                const unequipZone = this.add.rectangle(CONSTS.WIDTH - 80, y + 37, 100, 38, 0x000000, 0)
                     .setInteractive({ useHandCursor: true })
                     .on('pointerdown', () => this.unequipItem(item));
             } else {
-                // Кнопка "Экипировать"
+                // Кнопка "Надеть" (короче чем "Экипировать")
                 const equipBtn = this.add.graphics();
                 equipBtn.fillStyle(0x2196F3, 1);
-                equipBtn.fillRoundedRect(CONSTS.WIDTH - 140, y + 15, 110, 40, 8);
+                equipBtn.fillRoundedRect(CONSTS.WIDTH - 130, y + 18, 100, 38, 8);
 
-                this.add.text(CONSTS.WIDTH - 85, y + 35, 'Экипировать', {
+                this.add.text(CONSTS.WIDTH - 80, y + 37, 'Надеть', {
                     fontSize: '14px',
-                    fill: '#FFF'
+                    fill: '#FFFFFF',
+                    fontFamily: 'Arial',
+                    fontStyle: 'bold',
+                    stroke: '#000000',
+                    strokeThickness: 1
                 }).setOrigin(0.5);
 
-                const equipZone = this.add.rectangle(CONSTS.WIDTH - 85, y + 35, 110, 40, 0x000000, 0)
+                const equipZone = this.add.rectangle(CONSTS.WIDTH - 80, y + 37, 100, 38, 0x000000, 0)
                     .setInteractive({ useHandCursor: true })
                     .on('pointerdown', () => this.equipItem(item));
             }
