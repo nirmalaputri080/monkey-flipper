@@ -17,9 +17,27 @@ console.log('🔍 Telegram Bot Config:', {
   enablePolling
 });
 
-const bot = botToken 
-  ? new TelegramBot(botToken, { polling: enablePolling })
-  : null;
+let bot = null;
+
+if (botToken) {
+  bot = new TelegramBot(botToken, { polling: enablePolling });
+  
+  // Обработка ошибок polling
+  bot.on('polling_error', (error) => {
+    // Игнорируем ошибку конфликта (несколько инстансов)
+    if (error.code === 'ETELEGRAM' && error.message.includes('409 Conflict')) {
+      console.warn('⚠️ Bot polling conflict - another instance is running. This is normal during deploy.');
+    } else {
+      console.error('❌ Polling error:', error.message);
+    }
+  });
+  
+  // Graceful shutdown
+  process.on('SIGTERM', () => {
+    console.log('🛑 Stopping bot polling...');
+    bot.stopPolling();
+  });
+}
 
 /**
  * Создать инвойс для оплаты Telegram Stars (для WebApp)
