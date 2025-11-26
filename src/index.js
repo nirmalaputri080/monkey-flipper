@@ -212,25 +212,7 @@ const CONSTS = {
 };
 
 // ФИКС: DPI для четкого текста на Retina дисплеях
-// Ограничиваем до 2, чтобы не было проблем на 3x экранах
 const DPR = Math.min(window.devicePixelRatio || 1, 2);
-
-// ФИКС: Патчим Phaser.GameObjects.Text чтобы ВСЕ тексты были четкими
-Phaser.GameObjects.Text.prototype.setResolution = function(value) {
-    this.style.resolution = value;
-    this.updateText();
-    return this;
-};
-
-// Переопределяем фабрику текста для автоматического resolution
-const originalTextFactory = Phaser.GameObjects.GameObjectFactory.prototype.text;
-Phaser.GameObjects.GameObjectFactory.prototype.text = function(x, y, text, style) {
-    const finalStyle = { 
-        ...style, 
-        resolution: 2 // Фиксированное разрешение 2x для четкости
-    };
-    return originalTextFactory.call(this, x, y, text, finalStyle);
-};
 
 class MenuScene extends Phaser.Scene {
     constructor() {
@@ -4517,23 +4499,18 @@ class InventoryScene extends Phaser.Scene {
 
 // Конфиг Phaser
 const config = {
-    type: Phaser.AUTO, // AUTO выберет лучший вариант (Canvas может быть четче для текста)
+    type: Phaser.CANVAS, // Canvas рендерер - четче для текста чем WebGL
     width: CONSTS.WIDTH,
     height: CONSTS.HEIGHT,
-    parent: 'game-container', // Контейнер для canvas
+    parent: 'game-container',
     scale: {
-        mode: Phaser.Scale.FIT, // FIT лучше для четкости
-        autoCenter: Phaser.Scale.CENTER_BOTH, // Центрируем
-        width: CONSTS.WIDTH,
-        height: CONSTS.HEIGHT
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH
     },
-    // ФИКС: Настройки рендеринга
     render: {
-        antialias: false, // ВЫКЛ сглаживание - делает текст четче!
+        antialias: true,
         pixelArt: false,
-        roundPixels: true, // Округляем пиксели для четкости текста
-        powerPreference: 'high-performance'
-        // Убрали resolution - он конфликтует с текстовым resolution
+        roundPixels: false
     },
     physics: {
         default: 'arcade',
