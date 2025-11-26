@@ -4966,6 +4966,13 @@ class WalletScene extends Phaser.Scene {
                 }
             });
 
+            // Проверяем, может кошелёк уже подключён (из localStorage)
+            const currentWallet = this.tonConnectUI.wallet;
+            if (currentWallet) {
+                console.log('📱 Найден уже подключённый кошелёк:', currentWallet);
+                await this.onWalletConnected(currentWallet);
+            }
+
             console.log('✅ TON Connect UI инициализирован');
         } catch (error) {
             console.error('❌ Ошибка инициализации TON Connect:', error);
@@ -5140,12 +5147,24 @@ class WalletScene extends Phaser.Scene {
                 return;
             }
 
-            // Открываем модальное окно TON Connect
-            await this.tonConnectUI.openModal();
+            console.log('🔗 Открываем TON Connect модальное окно...');
+            
+            // Открываем модальное окно TON Connect и ждём результат
+            const connectedWallet = await this.tonConnectUI.connectWallet();
+            
+            console.log('📱 connectWallet результат:', connectedWallet);
+            
+            // Если подключение успешно - сохраняем
+            if (connectedWallet) {
+                await this.onWalletConnected(connectedWallet);
+            }
             
         } catch (error) {
             console.error('❌ Ошибка подключения:', error);
-            this.showError('Ошибка подключения к кошельку');
+            // Не показываем ошибку если пользователь просто закрыл окно
+            if (error?.message !== 'User closed the modal window') {
+                this.showError('Ошибка подключения к кошельку');
+            }
         } finally {
             this.isConnecting = false;
         }
