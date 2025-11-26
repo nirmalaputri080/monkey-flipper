@@ -205,16 +205,33 @@ async function addItemToInventory(userId, payload, amount, chargeId = null) {
 }
 
 /**
+ * Получить транзакции Stars напрямую через Telegram API
+ */
+async function fetchStarTransactions() {
+    try {
+        const response = await fetch(`https://api.telegram.org/bot${botToken}/getStarTransactions`);
+        const data = await response.json();
+        
+        if (data.ok) {
+            return data.result.transactions || [];
+        }
+        return [];
+    } catch (error) {
+        console.error('❌ Ошибка получения транзакций:', error);
+        return [];
+    }
+}
+
+/**
  * Проверка баланса Stars у бота (сколько заработали)
  */
 async function getStarsBalance() {
     try {
-        // Получаем транзакции бота
-        const transactions = await bot.getStarTransactions();
+        const transactions = await fetchStarTransactions();
         
         let totalEarned = 0;
         transactions.forEach(tx => {
-            if (tx.source.type === 'user') {
+            if (tx.source && tx.source.type === 'user') {
                 totalEarned += tx.amount;
             }
         });
@@ -228,16 +245,13 @@ async function getStarsBalance() {
     }
 }
 
+
 /**
  * Получить список транзакций Stars
  */
 async function getStarsTransactions() {
     try {
-        if (!bot) return [];
-        
-        const result = await bot.getStarTransactions();
-        return result.transactions || [];
-        
+        return await fetchStarTransactions();
     } catch (error) {
         console.error('❌ Ошибка получения транзакций:', error);
         return [];
