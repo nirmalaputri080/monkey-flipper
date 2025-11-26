@@ -3804,28 +3804,39 @@ app.get('/api/admin/stars-transactions', validateAdmin, async (req, res) => {
   }
 });
 
-// Возврат Stars по payload (для транзакций из Telegram API)
+// Возврат Stars по transaction ID (для транзакций из Telegram API)
 app.post('/api/admin/refund-by-payload', validateAdmin, async (req, res) => {
   try {
-    const { userId, payload } = req.body;
+    const { userId, transactionId } = req.body;
     
-    if (!userId || !payload) {
-      return res.status(400).json({ success: false, error: 'userId and payload required' });
+    if (!userId || !transactionId) {
+      return res.status(400).json({ success: false, error: 'userId and transactionId required' });
     }
     
-    // Для возврата нужен telegram_payment_charge_id, но у нас его нет
-    // Попробуем найти по payload или просто уведомим что нужен charge_id
-    console.log(`💸 Запрос на возврат: userId=${userId}, payload=${payload}`);
+    console.log(`💸 Возврат Stars: userId=${userId}, transactionId=${transactionId}`);
     
-    // К сожалению, без telegram_payment_charge_id нельзя сделать refund через API
-    // Нужно было сохранять его при successful_payment
-    res.json({ 
-      success: false, 
-      error: 'Для возврата нужен telegram_payment_charge_id. Этот платёж был до webhook и charge_id не сохранён. Верните звёзды вручную через @BotFather → My Bots → Payments.' 
+    // Делаем возврат через Telegram API
+    const response = await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/refundStarPayment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: userId,
+        telegram_payment_charge_id: transactionId
+      })
     });
     
+    const result = await response.json();
+    
+    if (result.ok) {
+      console.log(`✅ Возврат успешен: userId=${userId}`);
+      res.json({ success: true, message: `Stars успешно возвращены пользователю ${userId}` });
+    } else {
+      console.error(`❌ Ошибка возврата:`, result);
+      res.json({ success: false, error: result.description || 'Ошибка возврата' });
+    }
+    
   } catch (err) {
-    console.error('Refund by payload error:', err);
+    console.error('Refund error:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });

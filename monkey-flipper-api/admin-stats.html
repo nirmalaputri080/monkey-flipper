@@ -351,17 +351,17 @@
                 const username = user.username ? `@${user.username}` : `User ${user.id}`;
                 const firstName = user.first_name || '';
                 const date = new Date(tx.date * 1000).toLocaleString('ru-RU');
+                const txId = tx.id || '';
                 
                 return `
                 <div class="transaction">
                     <div class="user">
                         <span class="username">${firstName} (${username})</span>
                         <span class="date">${date}</span>
-                        <span class="date" style="font-size: 10px; opacity: 0.5;">ID: ${tx.source?.invoice_payload || 'N/A'}</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <div class="amount" style="color: #FFD700;">${tx.amount} ⭐</div>
-                        <button onclick="refundTransaction(${user.id}, '${tx.source?.invoice_payload || ''}')" 
+                        <button onclick="refundTransaction(${user.id}, '${txId}')" 
                                 style="padding: 5px 10px; background: #ff6b6b; border: none; border-radius: 5px; color: white; cursor: pointer; font-size: 12px;">
                             ↩️ Вернуть
                         </button>
@@ -370,8 +370,8 @@
             `}).join('');
         }
 
-        async function refundTransaction(userId, payload) {
-            if (!confirm(`Вернуть Stars пользователю ${userId}?\nPayload: ${payload}\n\nЭто действие нельзя отменить.`)) {
+        async function refundTransaction(userId, transactionId) {
+            if (!confirm(`Вернуть Stars пользователю ${userId}?\n\nЭто действие нельзя отменить.`)) {
                 return;
             }
             
@@ -382,7 +382,7 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${adminToken}`
                     },
-                    body: JSON.stringify({ userId, payload })
+                    body: JSON.stringify({ userId, transactionId })
                 });
                 
                 const data = await res.json();
