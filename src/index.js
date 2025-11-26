@@ -290,13 +290,14 @@ class MenuScene extends Phaser.Scene {
 
         // Кнопки - КОМПАКТНЫЕ ДЛЯ ТЕЛЕФОНА
         const buttons = [
-            { text: 'Играть', y: CONSTS.HEIGHT / 2 - 150, callback: () => this.scene.start('GameScene') },
-            { text: '1v1 Онлайн', y: CONSTS.HEIGHT / 2 - 90, callback: () => this.scene.start('MatchmakingScene') },
-            { text: 'Дуэли', y: CONSTS.HEIGHT / 2 - 30, callback: () => this.scene.start('DuelHistoryScene') },
-            { text: 'Рейтинг', y: CONSTS.HEIGHT / 2 + 30, callback: () => this.openLeaderboard() },
-            { text: '📊 Статистика', y: CONSTS.HEIGHT / 2 + 90, callback: () => this.scene.start('StatsScene') },
-            { text: '🎒 Инвентарь', y: CONSTS.HEIGHT / 2 + 150, callback: () => this.scene.start('InventoryScene') },
-            { text: '⭐ Магазин', y: CONSTS.HEIGHT / 2 + 210, callback: () => this.openWebShop() },
+            { text: 'Играть', y: CONSTS.HEIGHT / 2 - 170, callback: () => this.scene.start('GameScene') },
+            { text: '1v1 Онлайн', y: CONSTS.HEIGHT / 2 - 115, callback: () => this.scene.start('MatchmakingScene') },
+            { text: 'Дуэли', y: CONSTS.HEIGHT / 2 - 60, callback: () => this.scene.start('DuelHistoryScene') },
+            { text: 'Рейтинг', y: CONSTS.HEIGHT / 2 - 5, callback: () => this.openLeaderboard() },
+            { text: '📊 Статистика', y: CONSTS.HEIGHT / 2 + 50, callback: () => this.scene.start('StatsScene') },
+            { text: '🎒 Инвентарь', y: CONSTS.HEIGHT / 2 + 105, callback: () => this.scene.start('InventoryScene') },
+            { text: '💎 Кошелёк', y: CONSTS.HEIGHT / 2 + 160, callback: () => this.scene.start('WalletScene') },
+            { text: '⭐ Магазин', y: CONSTS.HEIGHT / 2 + 215, callback: () => this.openWebShop() },
             {
                 text: 'Выход', y: CONSTS.HEIGHT / 2 + 280, callback: () => {
                     // ФИКС: Закрываем Telegram Mini App правильно
@@ -4892,6 +4893,409 @@ class StatsScene extends Phaser.Scene {
     }
 }
 
+// ==================== WALLET SCENE (TON CONNECT) ====================
+class WalletScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'WalletScene' });
+        this.tonConnectUI = null;
+        this.walletInfo = null;
+        this.isConnecting = false;
+    }
+
+    async create() {
+        // Фон
+        this.background = this.add.image(0, 0, 'background_img_menu').setOrigin(0, 0);
+        this.background.setDisplaySize(CONSTS.WIDTH, CONSTS.HEIGHT);
+
+        // Заголовок
+        this.add.text(CONSTS.WIDTH / 2, 45, '💎 TON Кошелёк', {
+            fontSize: '28px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial Black',
+            stroke: '#000000',
+            strokeThickness: 4
+        }).setOrigin(0.5);
+
+        // Загрузка
+        this.statusText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2, '⏳ Загрузка...', {
+            fontSize: '18px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial'
+        }).setOrigin(0.5);
+
+        // Инициализируем TON Connect
+        await this.initTonConnect();
+
+        // Загружаем данные кошелька
+        const userData = getTelegramUserId();
+        await this.loadWalletInfo(userData.id);
+
+        // Кнопка назад
+        this.createBackButton();
+    }
+
+    async initTonConnect() {
+        try {
+            // Проверяем наличие TON Connect UI
+            if (typeof TON_CONNECT_UI === 'undefined' && typeof window.TonConnectUI === 'undefined') {
+                console.warn('⚠️ TON Connect UI не загружен');
+                return;
+            }
+
+            const TonConnectUIClass = window.TonConnectUI || TON_CONNECT_UI?.TonConnectUI;
+            
+            if (!TonConnectUIClass) {
+                console.warn('⚠️ TonConnectUI class не найден');
+                return;
+            }
+
+            // Создаём экземпляр TON Connect UI
+            this.tonConnectUI = new TonConnectUIClass({
+                manifestUrl: 'https://monkey-flipper.vercel.app/tonconnect-manifest.json',
+                buttonRootId: null // Мы не используем встроенную кнопку
+            });
+
+            // Подписываемся на изменения статуса подключения
+            this.tonConnectUI.onStatusChange((wallet) => {
+                console.log('🔄 TON Wallet status changed:', wallet);
+                if (wallet) {
+                    this.onWalletConnected(wallet);
+                } else {
+                    this.onWalletDisconnected();
+                }
+            });
+
+            console.log('✅ TON Connect UI инициализирован');
+        } catch (error) {
+            console.error('❌ Ошибка инициализации TON Connect:', error);
+        }
+    }
+
+    async loadWalletInfo(userId) {
+        try {
+            const response = await fetch(`${API_SERVER_URL}/api/wallet/ton-info/${userId}`);
+            const data = await response.json();
+
+            this.statusText.destroy();
+
+            if (data.success) {
+                this.walletInfo = data;
+                this.displayWalletUI();
+            } else {
+                this.showError('Ошибка загрузки');
+            }
+        } catch (error) {
+            console.error('❌ Ошибка загрузки кошелька:', error);
+            this.statusText.setText('❌ Ошибка соединения');
+        }
+    }
+
+    displayWalletUI() {
+        const startY = 100;
+
+        if (this.walletInfo.connected) {
+            // Кошелёк подключён
+            this.showConnectedWallet(startY);
+        } else {
+            // Кошелёк не подключён
+            this.showConnectPrompt(startY);
+        }
+    }
+
+    showConnectedWallet(startY) {
+        const wallet = this.walletInfo.wallet;
+        let y = startY;
+
+        // Карточка с информацией о кошельке
+        this.createCard(20, y, CONSTS.WIDTH - 40, 120, 0x0088cc);
+        
+        // Статус
+        this.add.text(CONSTS.WIDTH / 2, y + 20, '✅ Кошелёк подключён', {
+            fontSize: '18px',
+            fill: '#00FF00',
+            fontFamily: 'Arial Black',
+            stroke: '#000000',
+            strokeThickness: 2
+        }).setOrigin(0.5);
+
+        // Адрес
+        this.add.text(CONSTS.WIDTH / 2, y + 50, wallet.shortAddress, {
+            fontSize: '22px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial Black',
+            stroke: '#000000',
+            strokeThickness: 3
+        }).setOrigin(0.5);
+
+        // Баланс TON
+        this.add.text(CONSTS.WIDTH / 2, y + 85, `💎 ${wallet.tonBalance.toFixed(4)} TON`, {
+            fontSize: '16px',
+            fill: '#FFD700',
+            fontFamily: 'Arial'
+        }).setOrigin(0.5);
+
+        y += 140;
+
+        // Информация о возможностях
+        this.createCard(20, y, CONSTS.WIDTH - 40, 100, 0x1a237e);
+        
+        this.add.text(CONSTS.WIDTH / 2, y + 20, '🎮 Возможности:', {
+            fontSize: '16px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
+
+        this.add.text(CONSTS.WIDTH / 2, y + 45, '• Покупка NFT и предметов за TON', {
+            fontSize: '13px',
+            fill: '#CCCCCC',
+            fontFamily: 'Arial'
+        }).setOrigin(0.5);
+
+        this.add.text(CONSTS.WIDTH / 2, y + 65, '• Вывод заработанных наград', {
+            fontSize: '13px',
+            fill: '#CCCCCC',
+            fontFamily: 'Arial'
+        }).setOrigin(0.5);
+
+        this.add.text(CONSTS.WIDTH / 2, y + 85, '• Торговля на маркетплейсе', {
+            fontSize: '13px',
+            fill: '#CCCCCC',
+            fontFamily: 'Arial'
+        }).setOrigin(0.5);
+
+        y += 120;
+
+        // Кнопка отключения
+        this.createButton(
+            CONSTS.WIDTH / 2, y + 30,
+            '🔌 Отключить кошелёк',
+            0xFF5722,
+            () => this.disconnectWallet()
+        );
+    }
+
+    showConnectPrompt(startY) {
+        let y = startY;
+
+        // Описание
+        this.createCard(20, y, CONSTS.WIDTH - 40, 150, 0x1a237e);
+        
+        this.add.text(CONSTS.WIDTH / 2, y + 25, '💎 Подключите TON кошелёк', {
+            fontSize: '18px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial Black',
+            stroke: '#000000',
+            strokeThickness: 2
+        }).setOrigin(0.5);
+
+        this.add.text(CONSTS.WIDTH / 2, y + 55, 'Для доступа к:', {
+            fontSize: '14px',
+            fill: '#CCCCCC',
+            fontFamily: 'Arial'
+        }).setOrigin(0.5);
+
+        const features = [
+            '• NFT коллекциям и предметам',
+            '• Выводу наград за игру',
+            '• Торговле на маркетплейсе'
+        ];
+
+        features.forEach((text, i) => {
+            this.add.text(CONSTS.WIDTH / 2, y + 80 + (i * 20), text, {
+                fontSize: '13px',
+                fill: '#AAAAAA',
+                fontFamily: 'Arial'
+            }).setOrigin(0.5);
+        });
+
+        y += 170;
+
+        // Кнопка подключения (основная)
+        this.createButton(
+            CONSTS.WIDTH / 2, y + 30,
+            '🔗 Подключить кошелёк',
+            0x0088cc,
+            () => this.connectWallet()
+        );
+
+        y += 80;
+
+        // Поддерживаемые кошельки
+        this.add.text(CONSTS.WIDTH / 2, y, 'Поддерживаются: Tonkeeper, TON Space, MyTonWallet', {
+            fontSize: '11px',
+            fill: '#888888',
+            fontFamily: 'Arial'
+        }).setOrigin(0.5);
+    }
+
+    async connectWallet() {
+        if (this.isConnecting) return;
+        this.isConnecting = true;
+
+        try {
+            if (!this.tonConnectUI) {
+                // Fallback: открываем Tonkeeper напрямую
+                this.openTonkeeperConnect();
+                return;
+            }
+
+            // Открываем модальное окно TON Connect
+            await this.tonConnectUI.openModal();
+            
+        } catch (error) {
+            console.error('❌ Ошибка подключения:', error);
+            this.showError('Ошибка подключения к кошельку');
+        } finally {
+            this.isConnecting = false;
+        }
+    }
+
+    openTonkeeperConnect() {
+        // Fallback для Telegram - открываем Tonkeeper
+        const userData = getTelegramUserId();
+        const returnUrl = encodeURIComponent('https://t.me/MonkeyFlipperBot/app');
+        
+        // Deep link для Tonkeeper
+        const tonkeeperUrl = `https://app.tonkeeper.com/ton-connect?` +
+            `v=2&id=${userData.id}&r=${returnUrl}`;
+        
+        if (window.Telegram?.WebApp) {
+            window.Telegram.WebApp.openLink(tonkeeperUrl);
+        } else {
+            window.open(tonkeeperUrl, '_blank');
+        }
+        
+        this.isConnecting = false;
+    }
+
+    async onWalletConnected(wallet) {
+        console.log('✅ Кошелёк подключён:', wallet);
+        
+        const userData = getTelegramUserId();
+        const address = wallet.account?.address;
+
+        if (!address) {
+            console.error('❌ Нет адреса в wallet:', wallet);
+            return;
+        }
+
+        // Сохраняем на сервер
+        try {
+            const response = await fetch(`${API_SERVER_URL}/api/wallet/connect-ton`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: userData.id,
+                    walletAddress: address
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                console.log('✅ Кошелёк сохранён на сервере');
+                // Перезагружаем сцену
+                this.scene.restart();
+            } else {
+                this.showError(data.error || 'Ошибка сохранения');
+            }
+        } catch (error) {
+            console.error('❌ Ошибка сохранения кошелька:', error);
+            this.showError('Ошибка соединения');
+        }
+    }
+
+    async onWalletDisconnected() {
+        console.log('🔌 Кошелёк отключён');
+    }
+
+    async disconnectWallet() {
+        const userData = getTelegramUserId();
+
+        try {
+            // Отключаем через TON Connect UI если есть
+            if (this.tonConnectUI) {
+                await this.tonConnectUI.disconnect();
+            }
+
+            // Удаляем с сервера
+            const response = await fetch(`${API_SERVER_URL}/api/wallet/disconnect-ton`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: userData.id })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                console.log('✅ Кошелёк отключён');
+                this.scene.restart();
+            } else {
+                this.showError('Ошибка отключения');
+            }
+        } catch (error) {
+            console.error('❌ Ошибка отключения:', error);
+            this.showError('Ошибка соединения');
+        }
+    }
+
+    createCard(x, y, width, height, color) {
+        const card = this.add.graphics();
+        card.fillStyle(color, 0.85);
+        card.fillRoundedRect(x, y, width, height, 12);
+        card.lineStyle(2, 0xffffff, 0.3);
+        card.strokeRoundedRect(x, y, width, height, 12);
+    }
+
+    createButton(x, y, text, color, callback) {
+        const btn = this.add.graphics();
+        btn.fillStyle(color, 1);
+        btn.fillRoundedRect(x - 130, y - 22, 260, 44, 10);
+
+        const btnText = this.add.text(x, y, text, {
+            fontSize: '16px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial Black',
+            stroke: '#000000',
+            strokeThickness: 2
+        }).setOrigin(0.5);
+
+        const btnZone = this.add.rectangle(x, y, 260, 44, 0x000000, 0)
+            .setInteractive({ useHandCursor: true })
+            .on('pointerdown', callback)
+            .on('pointerover', () => btn.setAlpha(0.8))
+            .on('pointerout', () => btn.setAlpha(1));
+    }
+
+    createBackButton() {
+        const backBtn = this.add.graphics();
+        backBtn.fillStyle(0xFF4444, 1);
+        backBtn.fillRoundedRect(20, CONSTS.HEIGHT - 70, 120, 50, 8);
+        
+        this.add.text(80, CONSTS.HEIGHT - 45, 'Назад', {
+            fontSize: '18px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial Black',
+            stroke: '#000000',
+            strokeThickness: 2
+        }).setOrigin(0.5);
+
+        this.add.rectangle(80, CONSTS.HEIGHT - 45, 120, 50, 0x000000, 0)
+            .setInteractive({ useHandCursor: true })
+            .on('pointerdown', () => this.scene.start('MenuScene'));
+    }
+
+    showError(message) {
+        const errorText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT - 120, `❌ ${message}`, {
+            fontSize: '14px',
+            fill: '#FF6666',
+            fontFamily: 'Arial'
+        }).setOrigin(0.5);
+
+        this.time.delayedCall(3000, () => errorText.destroy());
+    }
+}
+
 // Конфиг Phaser
 const config = {
     type: Phaser.CANVAS, // Canvas рендерер - четче для текста чем WebGL
@@ -4914,7 +5318,7 @@ const config = {
             debug: CONSTS.DEBUG_PHYSICS
         },
     },
-    scene: [MenuScene, LeaderboardScene, InventoryScene, StatsScene, MatchmakingScene, DuelHistoryScene, GameScene]
+    scene: [MenuScene, LeaderboardScene, InventoryScene, StatsScene, WalletScene, MatchmakingScene, DuelHistoryScene, GameScene]
 };
 
 // Инициализация

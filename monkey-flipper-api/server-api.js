@@ -1172,6 +1172,151 @@ app.get('/api/wallet/:userId', async (req, res) => {
   }
 });
 
+// ==================== TON CONNECT ENDPOINTS ====================
+
+// Подключить TON кошелек
+app.post('/api/wallet/connect-ton', async (req, res) => {
+  const { userId, walletAddress } = req.body;
+  
+  if (!userId || !walletAddress) {
+    return res.status(400).json({ success: false, error: 'userId and walletAddress required' });
+  }
+
+  // Валидация адреса TON (простая проверка формата)
+  const tonAddressRegex = /^(EQ|UQ)[a-zA-Z0-9_-]{46}$/;
+  if (!tonAddressRegex.test(walletAddress)) {
+    return res.status(400).json({ success: false, error: 'Invalid TON wallet address format' });
+  }
+
+  try {
+    // Проверяем не привязан ли уже этот адрес к другому пользователю
+    const existingWallet = await pool.query(
+      'SELECT user_id FROM wallets WHERE wallet_address = $1 AND user_id != $2',
+      [walletAddress, userId]
+    );
+
+    if (existingWallet.rows.length > 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'This wallet is already connected to another account' 
+      });
+    }
+
+    // Создаем или обновляем кошелек
+    await pool.query(`
+      INSERT INTO wallets (user_id, wallet_address, monkey_coin_balance, stars_balance, ton_balance)
+      VALUES ($1, $2, 0, 0, 0)
+      ON CONFLICT (user_id)
+      DO UPDATE SET 
+        wallet_address = $2,
+        updated_at = NOW()
+    `, [userId, walletAddress]);
+
+    // Записываем в audit_log
+    await pool.query(`
+      INSERT INTO audit_log (user_id, event_type, metadata)
+      VALUES ($1, 'ton_wallet_connected', $2)
+    `, [userId, JSON.stringify({ walletAddress })]);
+
+    console.log(`✅ TON wallet connected: ${userId} -> ${walletAddress}`);
+
+    return res.json({
+      success: true,
+      message: 'TON wallet connected successfully',
+      walletAddress
+    });
+  } catch (err) {
+    console.error('Connect TON wallet error:', err);
+    return res.status(500).json({ success: false, error: 'DB error' });
+  }
+});
+
+// Отключить TON кошелек
+app.post('/api/wallet/disconnect-ton', async (req, res) => {
+  const { userId } = req.body;
+  
+  if (!userId) {
+    return res.status(400).json({ success: false, error: 'userId required' });
+  }
+
+  try {
+    // Получаем текущий адрес для лога
+    const current = await pool.query(
+      'SELECT wallet_address FROM wallets WHERE user_id = $1',
+      [userId]
+    );
+
+    const oldAddress = current.rows[0]?.wallet_address;
+
+    // Удаляем адрес кошелька
+    await pool.query(`
+      UPDATE wallets 
+      SET wallet_address = NULL, updated_at = NOW()
+      WHERE user_id = $1
+    `, [userId]);
+
+    // Записываем в audit_log
+    if (oldAddress) {
+      await pool.query(`
+        INSERT INTO audit_log (user_id, event_type, metadata)
+        VALUES ($1, 'ton_wallet_disconnected', $2)
+      `, [userId, JSON.stringify({ oldAddress })]);
+    }
+
+    console.log(`🔌 TON wallet disconnected: ${userId}`);
+
+    return res.json({
+      success: true,
+      message: 'TON wallet disconnected'
+    });
+  } catch (err) {
+    console.error('Disconnect TON wallet error:', err);
+    return res.status(500).json({ success: false, error: 'DB error' });
+  }
+});
+
+// Получить информацию о подключенном TON кошельке
+app.get('/api/wallet/ton-info/:userId', async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const result = await pool.query(
+      'SELECT wallet_address, ton_balance FROM wallets WHERE user_id = $1',
+      [userId]
+    );
+
+    if (result.rows.length === 0 || !result.rows[0].wallet_address) {
+      return res.json({
+        success: true,
+        connected: false,
+        wallet: null
+      });
+    }
+
+    const wallet = result.rows[0];
+    
+    // Форматируем адрес для отображения (первые 4 и последние 4 символа)
+    const shortAddress = wallet.wallet_address 
+      ? `${wallet.wallet_address.slice(0, 6)}...${wallet.wallet_address.slice(-4)}`
+      : null;
+
+    return res.json({
+      success: true,
+      connected: true,
+      wallet: {
+        address: wallet.wallet_address,
+        shortAddress,
+        tonBalance: parseFloat(wallet.ton_balance) || 0
+      }
+    });
+  } catch (err) {
+    console.error('Get TON info error:', err);
+    return res.status(500).json({ success: false, error: 'DB error' });
+  }
+});
+
+// ==================== END TON CONNECT ====================
+
 // Добавить Monkey Coins (например, за игру)
 app.post('/api/wallet/add-coins', gameResultLimiter, async (req, res) => {
   const { userId, amount } = req.body;
