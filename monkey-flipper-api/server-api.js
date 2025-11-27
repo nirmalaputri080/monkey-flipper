@@ -3371,16 +3371,16 @@ app.post('/api/tournaments/:tournamentId/join', async (req, res) => {
     // Проверяем баланс TON (если требуется вступительный взнос)
     if (parseFloat(t.entry_fee_ton) > 0) {
       const wallet = await client.query(
-        'SELECT ton_balance FROM wallets WHERE user_id = $1',
+        'SELECT ton_balance, wallet_address FROM wallets WHERE user_id = $1',
         [userId]
       );
       
-      // Проверяем наличие кошелька
-      if (wallet.rows.length === 0) {
+      // Проверяем наличие кошелька (запись должна существовать И wallet_address не должен быть NULL)
+      if (wallet.rows.length === 0 || !wallet.rows[0].wallet_address) {
         await client.query('ROLLBACK');
         return res.json({ 
           success: false, 
-          error: 'У вас нет TON кошелька! Подключите кошелек в профиле',
+          error: 'Подключите TON кошелек для участия в турнире!',
           needWallet: true
         });
       }
