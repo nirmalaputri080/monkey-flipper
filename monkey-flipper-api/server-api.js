@@ -3330,7 +3330,7 @@ app.post('/api/tournaments/:tournamentId/join', async (req, res) => {
     
     if (tournament.rows.length === 0) {
       await client.query('ROLLBACK');
-      return res.status(404).json({ success: false, error: 'Tournament not found' });
+      return res.status(404).json({ success: false, error: 'Турнир не найден' });
     }
     
     const t = tournament.rows[0];
@@ -3338,12 +3338,12 @@ app.post('/api/tournaments/:tournamentId/join', async (req, res) => {
     // Проверки
     if (t.status === 'finished') {
       await client.query('ROLLBACK');
-      return res.json({ success: false, error: 'Tournament finished' });
+      return res.json({ success: false, error: 'Турнир уже завершен' });
     }
     
     if (new Date() > new Date(t.end_time)) {
       await client.query('ROLLBACK');
-      return res.json({ success: false, error: 'Tournament expired' });
+      return res.json({ success: false, error: 'Время турнира истекло' });
     }
     
     // Проверяем лимит участников
@@ -3354,7 +3354,7 @@ app.post('/api/tournaments/:tournamentId/join', async (req, res) => {
     
     if (t.max_participants && participantCount.rows[0].count >= t.max_participants) {
       await client.query('ROLLBACK');
-      return res.json({ success: false, error: 'Tournament full' });
+      return res.json({ success: false, error: 'Турнир заполнен! Все места заняты' });
     }
     
     // Проверяем не вступил ли уже
@@ -3365,7 +3365,7 @@ app.post('/api/tournaments/:tournamentId/join', async (req, res) => {
     
     if (existing.rows.length > 0) {
       await client.query('ROLLBACK');
-      return res.json({ success: false, error: 'Already joined', alreadyJoined: true });
+      return res.json({ success: false, error: 'Вы уже участвуете в этом турнире!', alreadyJoined: true });
     }
     
     // Проверяем баланс TON (если требуется вступительный взнос)
@@ -3375,14 +3375,27 @@ app.post('/api/tournaments/:tournamentId/join', async (req, res) => {
         [userId]
       );
       
-      const userBalance = wallet.rows.length > 0 ? parseFloat(wallet.rows[0].ton_balance) : 0;
+      // Проверяем наличие кошелька
+      if (wallet.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.json({ 
+          success: false, 
+          error: 'У вас нет TON кошелька! Подключите кошелек в профиле',
+          needWallet: true
+        });
+      }
+      
+      const userBalance = parseFloat(wallet.rows[0].ton_balance);
       const entryFee = parseFloat(t.entry_fee_ton);
       
       if (userBalance < entryFee) {
         await client.query('ROLLBACK');
         return res.json({ 
           success: false, 
-          error: `Недостаточно TON! Нужно ${entryFee.toFixed(2)} TON, у вас ${userBalance.toFixed(2)} TON` 
+          error: `Недостаточно TON! Нужно ${entryFee.toFixed(2)} TON, у вас ${userBalance.toFixed(2)} TON`,
+          needTopUp: true,
+          required: entryFee,
+          current: userBalance
         });
       }
       
@@ -3434,14 +3447,14 @@ app.post('/api/tournaments/:tournamentId/join', async (req, res) => {
     
     res.json({
       success: true,
-      message: 'Joined tournament successfully',
+      message: 'Вы успешно вступили в турнир!',
       entryFeePaid: t.entry_fee_ton
     });
     
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Join tournament error:', err);
-    res.status(500).json({ success: false, error: 'DB error' });
+    res.status(500).json({ success: false, error: 'Ошибка сервера. Попробуйте позже' });
   } finally {
     client.release();
   }
@@ -3464,7 +3477,7 @@ app.post('/api/tournaments/:tournamentId/submit-score', async (req, res) => {
     );
     
     if (tournament.rows.length === 0) {
-      return res.json({ success: false, error: 'Tournament not active' });
+      return res.json({ success: false, error: 'Турнир неактивен или завершен' });
     }
     
     // Проверяем что пользователь участвует
@@ -3474,7 +3487,7 @@ app.post('/api/tournaments/:tournamentId/submit-score', async (req, res) => {
     );
     
     if (participant.rows.length === 0) {
-      return res.json({ success: false, error: 'Not a participant' });
+      return res.json({ success: false, error: 'Вы не участник этого турнира' });
     }
     
     // Обновляем лучший результат если новый лучше
@@ -3516,7 +3529,7 @@ app.post('/api/tournaments/:tournamentId/submit-score', async (req, res) => {
     
   } catch (err) {
     console.error('Submit tournament score error:', err);
-    res.status(500).json({ success: false, error: 'DB error' });
+    res.status(500).json({ success: false, error: 'Ошибка сервера. Попробуйте позже' });
   }
 });
 
