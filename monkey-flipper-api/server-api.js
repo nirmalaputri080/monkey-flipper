@@ -3407,6 +3407,14 @@ app.post('/api/tournaments/:tournamentId/join', async (req, res) => {
       VALUES ($1, $2, $3, $4, $5)
     `, [tournamentId, userId, username, autoRenew || false, parseFloat(t.entry_fee_ton) > 0]);
     
+    // ВАЖНО: Обновляем счетчик участников
+    await client.query(`
+      UPDATE tournaments 
+      SET current_participants = current_participants + 1,
+          updated_at = NOW()
+      WHERE id = $1
+    `, [tournamentId]);
+    
     // Логируем
     await logAudit('tournament_joined', userId, {
       tournamentId,

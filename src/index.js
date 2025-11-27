@@ -928,12 +928,26 @@ class TournamentScene extends Phaser.Scene {
             fill: '#E67E22'
         });
 
+        // Кнопка "Лидерборд"
+        const leaderboardBtn = this.add.rectangle(30, 15, 90, 35, 0x3498DB, 1)
+            .setInteractive({ useHandCursor: true });
+
+        const leaderboardText = this.add.text(30, 15, '📊 ТОП', {
+            fontSize: '14px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
+
+        leaderboardBtn.on('pointerdown', () => this.showLeaderboard(tournament));
+        leaderboardBtn.on('pointerover', () => leaderboardBtn.setFillStyle(0x5DADE2));
+        leaderboardBtn.on('pointerout', () => leaderboardBtn.setFillStyle(0x3498DB));
+
         // Кнопка "Вступить"
-        const joinBtn = this.add.rectangle(90, 15, 100, 40, tournament.isFull ? 0x95A5A6 : 0x27AE60, 1)
+        const joinBtn = this.add.rectangle(120, 15, 90, 35, tournament.isFull ? 0x95A5A6 : 0x27AE60, 1)
             .setInteractive({ useHandCursor: !tournament.isFull });
 
-        const joinText = this.add.text(90, 15, tournament.isFull ? 'FULL' : 'JOIN', {
-            fontSize: '16px',
+        const joinText = this.add.text(120, 15, tournament.isFull ? 'FULL' : 'JOIN', {
+            fontSize: '14px',
             fill: '#FFFFFF',
             fontFamily: 'Arial Black'
         }).setOrigin(0.5);
@@ -944,7 +958,7 @@ class TournamentScene extends Phaser.Scene {
             joinBtn.on('pointerout', () => joinBtn.setFillStyle(0x27AE60));
         }
 
-        container.add([bg, border, name, prizeText, entryText, participantsText, timeText, joinBtn, joinText]);
+        container.add([bg, border, name, prizeText, entryText, participantsText, timeText, leaderboardBtn, leaderboardText, joinBtn, joinText]);
 
         return container;
     }
@@ -1058,6 +1072,76 @@ class TournamentScene extends Phaser.Scene {
         if (days > 0) return `${days}д ${hours}ч`;
         if (hours > 0) return `${hours}ч ${minutes}м`;
         return `${minutes}м`;
+    }
+
+    async showLeaderboard(tournament) {
+        try {
+            const response = await fetch(`${API_SERVER_URL}/api/tournaments/${tournament.id}`);
+            const data = await response.json();
+
+            if (!data.success) {
+                alert('Ошибка загрузки лидерборда');
+                return;
+            }
+
+            // Создаем модальное окно с лидербордом
+            const overlay = this.add.rectangle(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2, CONSTS.WIDTH, CONSTS.HEIGHT, 0x000000, 0.8)
+                .setInteractive()
+                .setDepth(2000);
+
+            const panel = this.add.rectangle(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2, CONSTS.WIDTH - 40, CONSTS.HEIGHT - 100, 0x2C3E50, 1)
+                .setDepth(2001);
+
+            // Заголовок
+            const title = this.add.text(CONSTS.WIDTH / 2, 70, '🏆 ЛИДЕРБОРД', {
+                fontSize: '28px',
+                fill: '#FFD700',
+                fontFamily: 'Arial Black'
+            }).setOrigin(0.5).setDepth(2002);
+
+            const subtitle = this.add.text(CONSTS.WIDTH / 2, 100, tournament.name, {
+                fontSize: '16px',
+                fill: '#CCCCCC'
+            }).setOrigin(0.5).setDepth(2002);
+
+            // Список игроков
+            let yPos = 140;
+            data.leaderboard.slice(0, 10).forEach((player, index) => {
+                const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+                const color = index < 3 ? '#FFD700' : '#FFFFFF';
+
+                const playerText = this.add.text(40, yPos, 
+                    `${medal} ${player.username}: ${player.best_score}`, 
+                    {
+                        fontSize: '18px',
+                        fill: color,
+                        fontFamily: 'Arial'
+                    }
+                ).setDepth(2002);
+
+                yPos += 35;
+            });
+
+            // Кнопка закрыть
+            const closeBtn = this.add.rectangle(CONSTS.WIDTH / 2, CONSTS.HEIGHT - 60, 120, 45, 0xE74C3C, 1)
+                .setInteractive({ useHandCursor: true })
+                .setDepth(2002);
+
+            const closeText = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT - 60, 'Закрыть', {
+                fontSize: '18px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial Black'
+            }).setOrigin(0.5).setDepth(2002);
+
+            closeBtn.on('pointerdown', () => {
+                [overlay, panel, title, subtitle, closeBtn, closeText].forEach(obj => obj.destroy());
+                this.children.list.filter(obj => obj.depth === 2002).forEach(obj => obj.destroy());
+            });
+
+        } catch (error) {
+            console.error('❌ Error loading leaderboard:', error);
+            alert('Ошибка подключения к серверу');
+        }
     }
 
     createBackButton() {
