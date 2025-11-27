@@ -290,17 +290,18 @@ class MenuScene extends Phaser.Scene {
 
         // Кнопки - КОМПАКТНЫЕ ДЛЯ ТЕЛЕФОНА
         const buttons = [
-            { text: 'Играть', y: CONSTS.HEIGHT / 2 - 195, callback: () => this.scene.start('GameScene') },
-            { text: '1v1 Онлайн', y: CONSTS.HEIGHT / 2 - 145, callback: () => this.scene.start('MatchmakingScene') },
-            { text: 'Дуэли', y: CONSTS.HEIGHT / 2 - 95, callback: () => this.scene.start('DuelHistoryScene') },
-            { text: 'Рейтинг', y: CONSTS.HEIGHT / 2 - 45, callback: () => this.openLeaderboard() },
-            { text: '🎯 Достижения', y: CONSTS.HEIGHT / 2 + 5, callback: () => this.scene.start('AchievementsScene') },
-            { text: '🏆 Награды', y: CONSTS.HEIGHT / 2 + 55, callback: () => this.scene.start('DailyRewardScene') },
-            { text: '📊 Статистика', y: CONSTS.HEIGHT / 2 + 105, callback: () => this.scene.start('StatsScene') },
-            { text: '🎁 Рефералы', y: CONSTS.HEIGHT / 2 + 155, callback: () => this.scene.start('ReferralScene') },
-            { text: '🎒 Инвентарь', y: CONSTS.HEIGHT / 2 + 205, callback: () => this.scene.start('InventoryScene') },
-            { text: '💎 Кошелёк', y: CONSTS.HEIGHT / 2 + 255, callback: () => this.scene.start('WalletScene') },
-            { text: '⭐ Магазин', y: CONSTS.HEIGHT / 2 + 305, callback: () => this.openWebShop() },
+            { text: 'Играть', y: CONSTS.HEIGHT / 2 - 220, callback: () => this.scene.start('GameScene') },
+            { text: '1v1 Онлайн', y: CONSTS.HEIGHT / 2 - 170, callback: () => this.scene.start('MatchmakingScene') },
+            { text: 'Дуэли', y: CONSTS.HEIGHT / 2 - 120, callback: () => this.scene.start('DuelHistoryScene') },
+            { text: '🏆 Турниры', y: CONSTS.HEIGHT / 2 - 70, callback: () => this.scene.start('TournamentScene') },
+            { text: 'Рейтинг', y: CONSTS.HEIGHT / 2 - 20, callback: () => this.openLeaderboard() },
+            { text: '🎯 Достижения', y: CONSTS.HEIGHT / 2 + 30, callback: () => this.scene.start('AchievementsScene') },
+            { text: '💰 Награды', y: CONSTS.HEIGHT / 2 + 80, callback: () => this.scene.start('DailyRewardScene') },
+            { text: '📊 Статистика', y: CONSTS.HEIGHT / 2 + 130, callback: () => this.scene.start('StatsScene') },
+            { text: '🎁 Рефералы', y: CONSTS.HEIGHT / 2 + 180, callback: () => this.scene.start('ReferralScene') },
+            { text: '🎒 Инвентарь', y: CONSTS.HEIGHT / 2 + 230, callback: () => this.scene.start('InventoryScene') },
+            { text: '💎 Кошелёк', y: CONSTS.HEIGHT / 2 + 280, callback: () => this.scene.start('WalletScene') },
+            { text: '⭐ Магазин', y: CONSTS.HEIGHT / 2 + 330, callback: () => this.openWebShop() },
         ];
 
         buttons.forEach(btnData => {
@@ -752,6 +753,328 @@ class LeaderboardScene extends Phaser.Scene {
     }
 }
 
+
+// ==================== TOURNAMENT SCENE ====================
+class TournamentScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'TournamentScene' });
+        this.tournaments = [];
+        this.myTournaments = [];
+    }
+
+    async create() {
+        const userData = getTelegramUserId();
+
+        // Фон
+        this.background = this.add.image(0, 0, 'background_img_menu').setOrigin(0, 0);
+        this.background.setDisplaySize(CONSTS.WIDTH, CONSTS.HEIGHT);
+
+        // Заголовок
+        this.add.text(CONSTS.WIDTH / 2, 50, '🏆 ТУРНИРЫ', {
+            fontSize: '32px',
+            fill: '#FFD700',
+            fontFamily: 'Arial Black',
+            stroke: '#000',
+            strokeThickness: 4
+        }).setOrigin(0.5);
+
+        // Подзаголовок
+        this.add.text(CONSTS.WIDTH / 2, 85, 'Соревнуйтесь за реальные призы!', {
+            fontSize: '14px',
+            fill: '#CCCCCC'
+        }).setOrigin(0.5);
+
+        // Кнопка "Назад"
+        this.createBackButton();
+
+        // Табы
+        const tabY = 120;
+        this.createTab('Активные', 70, tabY, true, () => this.showActiveTournaments());
+        this.createTab('Мои', CONSTS.WIDTH - 70, tabY, false, () => this.showMyTournaments());
+
+        // Контейнер для списка турниров
+        this.tournamentsContainer = this.add.container(0, 160);
+
+        // Загружаем активные турниры по умолчанию
+        await this.loadActiveTournaments(userData.id);
+        this.showActiveTournaments();
+    }
+
+    createTab(text, x, y, active, callback) {
+        const bg = this.add.rectangle(x, y, 120, 40, active ? 0xFF6B35 : 0x555555, 1)
+            .setInteractive({ useHandCursor: true });
+
+        const txt = this.add.text(x, y, text, {
+            fontSize: '18px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
+
+        bg.on('pointerdown', callback);
+        bg.on('pointerover', () => bg.setFillStyle(0xFF8C5A));
+        bg.on('pointerout', () => bg.setFillStyle(active ? 0xFF6B35 : 0x555555));
+    }
+
+    async loadActiveTournaments(userId) {
+        try {
+            const response = await fetch(`${API_SERVER_URL}/api/tournaments/active`);
+            const data = await response.json();
+
+            if (data.success) {
+                this.tournaments = data.tournaments || [];
+                console.log('✅ Loaded tournaments:', this.tournaments.length);
+            }
+        } catch (error) {
+            console.error('❌ Error loading tournaments:', error);
+        }
+    }
+
+    async loadMyTournaments(userId) {
+        try {
+            const response = await fetch(`${API_SERVER_URL}/api/tournaments/my/${userId}`);
+            const data = await response.json();
+
+            if (data.success) {
+                this.myTournaments = data.tournaments || [];
+                console.log('✅ Loaded my tournaments:', this.myTournaments.length);
+            }
+        } catch (error) {
+            console.error('❌ Error loading my tournaments:', error);
+        }
+    }
+
+    showActiveTournaments() {
+        this.tournamentsContainer.removeAll(true);
+
+        if (this.tournaments.length === 0) {
+            this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2, 'Нет активных турниров\n\nСкоро появятся!', {
+                fontSize: '18px',
+                fill: '#AAAAAA',
+                align: 'center'
+            }).setOrigin(0.5);
+            return;
+        }
+
+        let yOffset = 0;
+
+        this.tournaments.forEach((tournament) => {
+            const card = this.createTournamentCard(tournament, yOffset);
+            this.tournamentsContainer.add(card);
+            yOffset += 140;
+        });
+    }
+
+    async showMyTournaments() {
+        const userData = getTelegramUserId();
+        await this.loadMyTournaments(userData.id);
+
+        this.tournamentsContainer.removeAll(true);
+
+        if (this.myTournaments.length === 0) {
+            const txt = this.add.text(CONSTS.WIDTH / 2, CONSTS.HEIGHT / 2, 'Вы еще не участвуете\nни в одном турнире', {
+                fontSize: '18px',
+                fill: '#AAAAAA',
+                align: 'center'
+            }).setOrigin(0.5);
+            this.tournamentsContainer.add(txt);
+            return;
+        }
+
+        let yOffset = 0;
+
+        this.myTournaments.forEach((tournament) => {
+            const card = this.createMyTournamentCard(tournament, yOffset);
+            this.tournamentsContainer.add(card);
+            yOffset += 140;
+        });
+    }
+
+    createTournamentCard(tournament, yOffset) {
+        const container = this.add.container(CONSTS.WIDTH / 2, yOffset);
+
+        // Фон карточки
+        const bg = this.add.rectangle(0, 0, CONSTS.WIDTH - 40, 120, 0x2C3E50, 1);
+        const border = this.add.rectangle(0, 0, CONSTS.WIDTH - 40, 120, 0x3498DB, 0).setStrokeStyle(3, 0x3498DB);
+
+        // Название турнира
+        const name = this.add.text(-130, -40, tournament.name || 'Weekly Tournament', {
+            fontSize: '20px',
+            fill: '#FFD700',
+            fontFamily: 'Arial Black'
+        });
+
+        // Призовой фонд
+        const prizeText = this.add.text(-130, -10, `💰 Призовой фонд: ${parseFloat(tournament.prize_pool_ton).toFixed(2)} TON`, {
+            fontSize: '14px',
+            fill: '#27AE60'
+        });
+
+        // Вступительный взнос
+        const entryText = this.add.text(-130, 10, `🎫 Взнос: ${parseFloat(tournament.entry_fee_ton).toFixed(2)} TON`, {
+            fontSize: '14px',
+            fill: '#E74C3C'
+        });
+
+        // Участники
+        const participantsText = this.add.text(-130, 30, `👥 ${tournament.current_participants}/${tournament.max_participants || '∞'}`, {
+            fontSize: '14px',
+            fill: '#95A5A6'
+        });
+
+        // Время до конца
+        const timeRemaining = this.formatTimeRemaining(tournament.seconds_until_end || 0);
+        const timeText = this.add.text(70, -40, `⏰ ${timeRemaining}`, {
+            fontSize: '13px',
+            fill: '#E67E22'
+        });
+
+        // Кнопка "Вступить"
+        const joinBtn = this.add.rectangle(90, 15, 100, 40, tournament.isFull ? 0x95A5A6 : 0x27AE60, 1)
+            .setInteractive({ useHandCursor: !tournament.isFull });
+
+        const joinText = this.add.text(90, 15, tournament.isFull ? 'FULL' : 'JOIN', {
+            fontSize: '16px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial Black'
+        }).setOrigin(0.5);
+
+        if (!tournament.isFull) {
+            joinBtn.on('pointerdown', () => this.joinTournament(tournament));
+            joinBtn.on('pointerover', () => joinBtn.setFillStyle(0x2ECC71));
+            joinBtn.on('pointerout', () => joinBtn.setFillStyle(0x27AE60));
+        }
+
+        container.add([bg, border, name, prizeText, entryText, participantsText, timeText, joinBtn, joinText]);
+
+        return container;
+    }
+
+    createMyTournamentCard(tournament, yOffset) {
+        const container = this.add.container(CONSTS.WIDTH / 2, yOffset);
+
+        // Фон
+        const bg = this.add.rectangle(0, 0, CONSTS.WIDTH - 40, 120, 0x34495E, 1);
+
+        // Название
+        const name = this.add.text(-130, -40, tournament.name || 'Tournament', {
+            fontSize: '18px',
+            fill: '#FFD700',
+            fontFamily: 'Arial Black'
+        });
+
+        // Мое место
+        const place = this.add.text(-130, -10, `📍 Место: ${tournament.current_place || '-'}`, {
+            fontSize: '15px',
+            fill: '#3498DB'
+        });
+
+        // Лучший счет
+        const score = this.add.text(-130, 15, `🎯 Лучший: ${tournament.best_score || 0}`, {
+            fontSize: '14px',
+            fill: '#27AE60'
+        });
+
+        // Попытки
+        const attempts = this.add.text(-130, 40, `🎮 Попыток: ${tournament.attempts || 0}`, {
+            fontSize: '14px',
+            fill: '#95A5A6'
+        });
+
+        // Статус
+        const statusText = tournament.status === 'finished' ? '✅ Завершен' : '🔥 Активен';
+        const status = this.add.text(70, -30, statusText, {
+            fontSize: '14px',
+            fill: tournament.status === 'finished' ? '#95A5A6' : '#E67E22'
+        });
+
+        // Кнопка "Играть"
+        if (tournament.status !== 'finished') {
+            const playBtn = this.add.rectangle(90, 15, 100, 40, 0xFF6B35, 1)
+                .setInteractive({ useHandCursor: true });
+
+            const playText = this.add.text(90, 15, 'ИГРАТЬ', {
+                fontSize: '16px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial Black'
+            }).setOrigin(0.5);
+
+            playBtn.on('pointerdown', () => this.playTournament(tournament));
+            playBtn.on('pointerover', () => playBtn.setFillStyle(0xFF8C5A));
+            playBtn.on('pointerout', () => playBtn.setFillStyle(0xFF6B35));
+
+            container.add([playBtn, playText]);
+        }
+
+        container.add([bg, name, place, score, attempts, status]);
+
+        return container;
+    }
+
+    async joinTournament(tournament) {
+        const userData = getTelegramUserId();
+
+        try {
+            const response = await fetch(`${API_SERVER_URL}/api/tournaments/${tournament.id}/join`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: userData.id,
+                    username: userData.username,
+                    autoRenew: false
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                console.log('✅ Joined tournament:', tournament.id);
+                alert(`Вы вступили в турнир!\nВзнос: ${tournament.entry_fee_ton} TON`);
+                this.scene.restart();
+            } else {
+                console.error('❌ Join failed:', data.error);
+                alert(`Ошибка: ${data.error}`);
+            }
+        } catch (error) {
+            console.error('❌ Join tournament error:', error);
+            alert('Ошибка подключения к серверу');
+        }
+    }
+
+    playTournament(tournament) {
+        // Сохраняем ID турнира для отправки результата
+        localStorage.setItem('currentTournamentId', tournament.id);
+        
+        // Запускаем игру
+        this.scene.start('GameScene');
+    }
+
+    formatTimeRemaining(seconds) {
+        if (seconds <= 0) return 'Завершен';
+
+        const days = Math.floor(seconds / 86400);
+        const hours = Math.floor((seconds % 86400) / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+
+        if (days > 0) return `${days}д ${hours}ч`;
+        if (hours > 0) return `${hours}ч ${minutes}м`;
+        return `${minutes}м`;
+    }
+
+    createBackButton() {
+        const backBtn = this.add.rectangle(50, CONSTS.HEIGHT - 40, 80, 40, 0x34495E, 1)
+            .setInteractive({ useHandCursor: true });
+
+        const backText = this.add.text(50, CONSTS.HEIGHT - 40, '← Назад', {
+            fontSize: '16px',
+            fill: '#FFFFFF',
+            fontFamily: 'Arial'
+        }).setOrigin(0.5);
+
+        backBtn.on('pointerdown', () => this.scene.start('MenuScene'));
+        backBtn.on('pointerover', () => backBtn.setFillStyle(0x4A6278));
+        backBtn.on('pointerout', () => backBtn.setFillStyle(0x34495E));
+    }
+}
 
 // ==================== MATCHMAKING SCENE ====================
 // Сцена поиска оппонента для 1v1 режима
@@ -3232,6 +3555,12 @@ class GameScene extends Phaser.Scene {
                     // НОВОЕ: Расходуем буст после завершения игры (если был экипирован)
                     this.consumeBoostAfterGame(userData.id);
                     
+                    // НОВОЕ: Отправляем результат в турнир (если играем в турнире)
+                    const tournamentId = localStorage.getItem('currentTournamentId');
+                    if (tournamentId) {
+                        this.submitTournamentScore(userData.id, tournamentId, finalScore);
+                    }
+                    
                     // НОВОЕ: Показываем полученные Monkey Coins
                     if (serverResult.coinsEarned > 0) {
                         coinsEarnedText.setText(`+${serverResult.coinsEarned} 🐵 Monkey Coins!`);
@@ -4566,6 +4895,55 @@ class GameScene extends Phaser.Scene {
             }
         } catch (error) {
             console.error('❌ Ошибка расходования буста:', error);
+        }
+    }
+
+    // Отправка результата в турнир
+    async submitTournamentScore(userId, tournamentId, score) {
+        try {
+            const response = await fetch(`${API_SERVER_URL}/api/tournaments/${tournamentId}/submit-score`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, score })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                if (data.newBest) {
+                    console.log(`🏆 Новый рекорд турнира: ${score} (был ${data.previousBest})`);
+                    
+                    // Показываем уведомление
+                    const notif = this.add.text(CONSTS.WIDTH / 2, 200, '🏆 Новый рекорд турнира!', {
+                        fontSize: '24px',
+                        fill: '#FFD700',
+                        fontStyle: 'bold',
+                        stroke: '#000',
+                        strokeThickness: 4,
+                        backgroundColor: '#000000AA',
+                        padding: { x: 20, y: 10 }
+                    }).setOrigin(0.5).setDepth(1001).setScrollFactor(0);
+                    
+                    this.tweens.add({
+                        targets: notif,
+                        alpha: 0,
+                        y: 150,
+                        duration: 3000,
+                        delay: 1000,
+                        onComplete: () => notif.destroy()
+                    });
+                } else {
+                    console.log(`🎯 Турнир: ${score}, лучший: ${data.best}`);
+                }
+            } else {
+                console.log('⚠️ Турнир не активен или вы не участник');
+            }
+            
+            // Очищаем ID турнира
+            localStorage.removeItem('currentTournamentId');
+            
+        } catch (error) {
+            console.error('❌ Ошибка отправки результата в турнир:', error);
         }
     }
 }
@@ -6501,7 +6879,7 @@ const config = {
             debug: CONSTS.DEBUG_PHYSICS
         },
     },
-    scene: [MenuScene, LeaderboardScene, InventoryScene, StatsScene, WalletScene, AchievementsScene, DailyRewardScene, ReferralScene, MatchmakingScene, DuelHistoryScene, GameScene]
+    scene: [MenuScene, LeaderboardScene, InventoryScene, StatsScene, WalletScene, AchievementsScene, DailyRewardScene, ReferralScene, TournamentScene, MatchmakingScene, DuelHistoryScene, GameScene]
 };
 
 // Инициализация
