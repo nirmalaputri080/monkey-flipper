@@ -3375,9 +3375,15 @@ app.post('/api/tournaments/:tournamentId/join', async (req, res) => {
         [userId]
       );
       
-      if (wallet.rows.length === 0 || parseFloat(wallet.rows[0].ton_balance) < parseFloat(t.entry_fee_ton)) {
+      const userBalance = wallet.rows.length > 0 ? parseFloat(wallet.rows[0].ton_balance) : 0;
+      const entryFee = parseFloat(t.entry_fee_ton);
+      
+      if (userBalance < entryFee) {
         await client.query('ROLLBACK');
-        return res.json({ success: false, error: 'Insufficient TON balance' });
+        return res.json({ 
+          success: false, 
+          error: `Недостаточно TON! Нужно ${entryFee.toFixed(2)} TON, у вас ${userBalance.toFixed(2)} TON` 
+        });
       }
       
       // Списываем вступительный взнос
