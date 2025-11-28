@@ -4591,6 +4591,58 @@ app.get('/api/admin/stars-purchases', validateAdmin, async (req, res) => {
   }
 });
 
+// Debug endpoint для проверки конфигурации
+app.get('/api/debug/config', async (req, res) => {
+  try {
+    // Проверяем подключение к БД
+    const dbTest = await pool.query('SELECT NOW() as time, current_database() as db');
+    
+    // Проверяем таблицы
+    const tables = await pool.query(`
+      SELECT table_name FROM information_schema.tables 
+      WHERE table_schema = 'public'
+      ORDER BY table_name
+    `);
+    
+    // Проверяем shop-items.json
+    const path = require('path');
+    const fs = require('fs');
+    const shopItemsPath = path.join(__dirname, 'shop-items.json');
+    let shopItemsExists = false;
+    let shopItemsCount = 0;
+    try {
+      const shopItems = JSON.parse(fs.readFileSync(shopItemsPath, 'utf8'));
+      shopItemsExists = true;
+      shopItemsCount = (shopItems.skins?.length || 0) + (shopItems.nft_characters?.length || 0) + (shopItems.boosts?.length || 0);
+    } catch (e) {
+      console.error('shop-items.json error:', e.message);
+    }
+    
+    res.json({
+      success: true,
+      database: {
+        connected: true,
+        time: dbTest.rows[0].time,
+        name: dbTest.rows[0].db
+      },
+      tables: tables.rows.map(r => r.table_name),
+      shopItems: {
+        exists: shopItemsExists,
+        path: shopItemsPath,
+        count: shopItemsCount
+      },
+      environment: {
+        hasDbUrl: !!process.env.DATABASE_URL,
+        hasBotToken: !!process.env.BOT_TOKEN,
+        hasWebhookUrl: !!process.env.WEBHOOK_URL
+      }
+    });
+  } catch (err) {
+    console.error('Debug config error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ==================== END ADMIN API ====================
 
 app.listen(PORT, () => {
