@@ -180,18 +180,30 @@ function setupPaymentHandler(server) {
  */
 async function addItemToInventory(userId, payload, amount, chargeId = null) {
     const { Pool } = require('pg');
+    const fs = require('fs');
+    const crypto = require('crypto');
+    
+    console.log(`🔍 addItemToInventory called: userId=${userId}, payload=${payload}, amount=${amount}, chargeId=${chargeId}`);
+    console.log(`🔍 DATABASE_URL exists: ${!!process.env.DATABASE_URL}`);
+    
+    if (!process.env.DATABASE_URL) {
+        console.error('❌ DATABASE_URL is not set!');
+        throw new Error('DATABASE_URL is not configured');
+    }
+    
     const pool = new Pool({ 
         connectionString: process.env.DATABASE_URL,
         ssl: process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost') 
             ? { rejectUnauthorized: false } 
             : false
     });
-    const fs = require('fs');
-    const crypto = require('crypto');
     
-    const client = await pool.connect();
+    let client;
     
     try {
+        client = await pool.connect();
+        console.log(`✅ Database connected successfully`);
+        
         await client.query('BEGIN');
         
         // payload имеет формат: purchase_USERID_ITEMID_TIMESTAMP или purchase_USERID_TIMESTAMP (старый)
@@ -263,19 +275,33 @@ async function addItemToInventory(userId, payload, amount, chargeId = null) {
         
         if (!item) {
             console.error(`❌ Товар не найден: itemId=${itemId}, amount=${amount} XTR`);
+            console.error(`❌ Available items:`, allItems.map(i => ({ id: i.id, priceXTR: i.priceXTR })));
             await client.query('ROLLBACK');
             throw new Error(`Item not found: itemId=${itemId}, price=${amount} XTR`);
         }
         
+        console.log(`✅ Item found: ${item.name} (${item.id}), price: ${item.priceXTR} XTR`);
+        
         const purchaseId = crypto.randomUUID();
         
+        // Проверяем существование таблиц
+        const tablesCheck = await client.query(`
+            SELECT table_name FROM information_schema.tables 
+            WHERE table_schema = 'public' AND table_name IN ('purchases', 'transactions')
+        `);
+        console.log(`📊 Existing tables: ${tablesCheck.rows.map(r => r.table_name).join(', ')}`);
+        
         // Добавляем покупку в БД
+        console.log(`📝 Inserting purchase: ${purchaseId}, ${userId}, ${item.id}, ${item.name}, ${amount}`);
         await client.query(`
             INSERT INTO purchases (id, user_id, item_id, item_name, price, currency, status, purchased_at)
             VALUES ($1, $2, $3, $4, $5, 'XTR', 'active', NOW())
         `, [purchaseId, userId, item.id, item.name, amount]);
+        console.log(`✅ Purchase inserted`);
         
         // Записываем транзакцию с chargeId как nonce для защиты от дубликатов
+        const txNonce = chargeId || `${payload}_${Date.now()}`; // Добавляем timestamp для уникальности
+        console.log(`📝 Inserting transaction with nonce: ${txNonce}`);
         await client.query(`
             INSERT INTO transactions (id, user_id, type, amount, currency, status, nonce, metadata)
             VALUES ($1, $2, 'purchase_xtr', $3, 'XTR', 'completed', $4, $5)
@@ -283,9 +309,10 @@ async function addItemToInventory(userId, payload, amount, chargeId = null) {
             crypto.randomUUID(),
             userId,
             amount,
-            chargeId || payload, // Используем chargeId как уникальный идентификатор
+            txNonce,
             JSON.stringify({ itemId: item.id, itemName: item.name, payload, chargeId })
         ]);
+        console.log(`✅ Transaction inserted`);
         
         await client.query('COMMIT');
         
@@ -294,12 +321,17 @@ async function addItemToInventory(userId, payload, amount, chargeId = null) {
         return item;
         
     } catch (error) {
-        await client.query('ROLLBACK');
-        console.error('❌ Ошибка добавления товара:', error);
+        if (client) {
+            await client.query('ROLLBACK').catch(e => console.error('Rollback error:', e));
+        }
+        console.error('❌ Ошибка добавления товара:', error.message);
+        console.error('❌ Error stack:', error.stack);
         throw error;
     } finally {
-        client.release();
-        await pool.end();
+        if (client) {
+            client.release();
+        }
+        await pool.end().catch(e => console.error('Pool end error:', e));
     }
 }
 

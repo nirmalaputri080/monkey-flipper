@@ -199,7 +199,10 @@
 
         <!-- Статистика (скрыта до входа) -->
         <div id="statsSection" class="hidden">
-            <button class="refresh-btn" onclick="loadStats()">🔄 Обновить данные</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <button class="refresh-btn" onclick="loadStats()" style="margin-bottom: 0;">🔄 Обновить данные</button>
+                <button class="refresh-btn" onclick="logout()" style="margin-bottom: 0; background: rgba(255,100,100,0.3);">🚪 Выйти</button>
+            </div>
 
             <div class="stats-grid">
                 <div class="stat-card">
@@ -263,8 +266,33 @@
 
         // Проверяем сохранённый токен при загрузке
         if (adminToken) {
-            showStats();
-            loadStats();
+            // Проверяем что токен валидный
+            validateToken().then(valid => {
+                if (valid) {
+                    showStats();
+                    loadStats();
+                } else {
+                    logout();
+                }
+            });
+        }
+
+        async function validateToken() {
+            try {
+                const res = await fetch(`${API_URL}/api/admin/purchases-stats`, {
+                    headers: { 'Authorization': `Bearer ${adminToken}` }
+                });
+                return res.ok;
+            } catch {
+                return false;
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('adminToken');
+            adminToken = null;
+            document.getElementById('loginSection').classList.remove('hidden');
+            document.getElementById('statsSection').classList.add('hidden');
         }
 
         function login() {
