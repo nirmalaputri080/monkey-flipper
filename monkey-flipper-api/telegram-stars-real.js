@@ -134,6 +134,8 @@ function setupPaymentHandler(server) {
                         payment.telegram_payment_charge_id
                     );
                     
+                    console.log(`✅ Товар выдан успешно: ${item.name} (${item.id})`);
+                    
                     // Отправить подтверждение
                     await bot.sendMessage(userId, 
                         `🎉 Покупка успешна!\n\n` +
@@ -144,6 +146,14 @@ function setupPaymentHandler(server) {
                     
                 } catch (error) {
                     console.error('❌ Ошибка выдачи товара:', error);
+                    console.error('❌ Error stack:', error.stack);
+                    console.error('❌ Error details:', {
+                        message: error.message,
+                        code: error.code,
+                        userId,
+                        payload: payment.invoice_payload,
+                        amount: payment.total_amount
+                    });
                     await bot.sendMessage(userId, 
                         `⚠️ Оплата прошла, но возникла ошибка при выдаче товара.\n` +
                         `Payload: ${payment.invoice_payload}\n` +
@@ -225,9 +235,13 @@ async function addItemToInventory(userId, payload, amount, chargeId = null) {
             console.log(`📦 Parsed itemId from payload: ${itemId}`);
         }
         
-        // Загружаем товары
-        const shopItems = JSON.parse(fs.readFileSync('./shop-items.json', 'utf8'));
+        // Загружаем товары (используем абсолютный путь!)
+        const path = require('path');
+        const shopItemsPath = path.join(__dirname, 'shop-items.json');
+        console.log(`📂 Loading shop items from: ${shopItemsPath}`);
+        const shopItems = JSON.parse(fs.readFileSync(shopItemsPath, 'utf8'));
         const allItems = [...shopItems.skins, ...shopItems.nft_characters, ...shopItems.boosts];
+        console.log(`📦 Total items loaded: ${allItems.length}`);
         
         let item;
         
