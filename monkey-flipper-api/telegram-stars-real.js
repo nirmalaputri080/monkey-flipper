@@ -170,13 +170,47 @@ function setupPaymentHandler(server) {
  */
 async function addItemToInventory(userId, payload, amount, chargeId = null) {
     const { Pool } = require('pg');
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    const pool = new Pool({ 
+        connectionString: process.env.DATABASE_URL,
+        ssl: process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost') 
+            ? { rejectUnauthorized: false } 
+            : false
+    });
     const fs = require('fs');
     const crypto = require('crypto');
     
+    const client = await pool.connect();
+    
     try {
+        await client.query('BEGIN');
+        
         // payload имеет формат: purchase_USERID_ITEMID_TIMESTAMP или purchase_USERID_TIMESTAMP (старый)
         console.log(`🔍 Processing payment: userId=${userId}, payload=${payload}, amount=${amount}, chargeId=${chargeId}`);
+        
+        // Проверяем дубликат по chargeId (если уже обработали этот платеж)
+        if (chargeId) {
+            const existingPurchase = await client.query(
+                'SELECT id FROM purchases WHERE id = $1 OR (user_id = $2 AND item_id LIKE $3)',
+                [chargeId, userId, `%_${Date.now().toString().slice(0, -3)}%`]
+            );
+            // Простая проверка - если chargeId уже использован как nonce в транзакции
+            const existingTx = await client.query(
+                'SELECT id FROM transactions WHERE nonce = $1',
+                [chargeId]
+            );
+            if (existingTx.rows.length > 0) {
+                console.log(`⚠️ Дубликат платежа, chargeId уже обработан: ${chargeId}`);
+                await client.query('ROLLBACK');
+                // Находим уже выданный товар
+                const existingItem = await client.query(
+                    'SELECT item_id, item_name FROM purchases WHERE user_id = $1 ORDER BY purchased_at DESC LIMIT 1',
+                    [userId]
+                );
+                if (existingItem.rows.length > 0) {
+                    return { id: existingItem.rows[0].item_id, name: existingItem.rows[0].item_name, duplicate: true };
+                }
+            }
+        }
         
         // Парсим payload для извлечения itemId
         const payloadParts = payload.split('_');
@@ -215,25 +249,42 @@ async function addItemToInventory(userId, payload, amount, chargeId = null) {
         
         if (!item) {
             console.error(`❌ Товар не найден: itemId=${itemId}, amount=${amount} XTR`);
+            await client.query('ROLLBACK');
             throw new Error(`Item not found: itemId=${itemId}, price=${amount} XTR`);
         }
         
         const purchaseId = crypto.randomUUID();
         
-        // Добавляем покупку в БД (без charge_id - колонки нет в таблице)
-        await pool.query(`
+        // Добавляем покупку в БД
+        await client.query(`
             INSERT INTO purchases (id, user_id, item_id, item_name, price, currency, status, purchased_at)
             VALUES ($1, $2, $3, $4, $5, 'XTR', 'active', NOW())
         `, [purchaseId, userId, item.id, item.name, amount]);
+        
+        // Записываем транзакцию с chargeId как nonce для защиты от дубликатов
+        await client.query(`
+            INSERT INTO transactions (id, user_id, type, amount, currency, status, nonce, metadata)
+            VALUES ($1, $2, 'purchase_xtr', $3, 'XTR', 'completed', $4, $5)
+        `, [
+            crypto.randomUUID(),
+            userId,
+            amount,
+            chargeId || payload, // Используем chargeId как уникальный идентификатор
+            JSON.stringify({ itemId: item.id, itemName: item.name, payload, chargeId })
+        ]);
+        
+        await client.query('COMMIT');
         
         console.log(`✅ Товар "${item.name}" (${item.id}) добавлен пользователю ${userId}`);
         
         return item;
         
     } catch (error) {
+        await client.query('ROLLBACK');
         console.error('❌ Ошибка добавления товара:', error);
         throw error;
     } finally {
+        client.release();
         await pool.end();
     }
 }
