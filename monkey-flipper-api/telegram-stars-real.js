@@ -212,13 +212,9 @@ async function addItemToInventory(userId, payload, amount, chargeId = null) {
         // payload имеет формат: purchase_USERID_ITEMID_TIMESTAMP или purchase_USERID_TIMESTAMP (старый)
         console.log(`🔍 Processing payment: userId=${userId}, payload=${payload}, amount=${amount}, chargeId=${chargeId}`);
         
-        // Проверяем дубликат по chargeId (если уже обработали этот платеж)
+        // Проверяем дубликат по chargeId в таблице transactions (nonce)
         if (chargeId) {
-            const existingPurchase = await client.query(
-                'SELECT id FROM purchases WHERE id = $1 OR (user_id = $2 AND item_id LIKE $3)',
-                [chargeId, userId, `%_${Date.now().toString().slice(0, -3)}%`]
-            );
-            // Простая проверка - если chargeId уже использован как nonce в транзакции
+            // chargeId хранится в nonce колонке transactions, НЕ в purchases.id (который UUID)
             const existingTx = await client.query(
                 'SELECT id FROM transactions WHERE nonce = $1',
                 [chargeId]
