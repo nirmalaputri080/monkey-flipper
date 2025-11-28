@@ -3517,7 +3517,7 @@ app.post('/api/tournaments/:tournamentId/submit-score', async (req, res) => {
         UPDATE tournament_participants 
         SET attempts = attempts + 1,
             last_attempt_at = NOW()
-        WHERE tournament_id = $2 AND user_id = $3
+        WHERE tournament_id = $1 AND user_id = $2
       `, [tournamentId, userId]);
       
       res.json({
