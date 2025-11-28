@@ -119,7 +119,9 @@ function setupPaymentHandler(server) {
                 const payment = msg.successful_payment;
                 const userId = msg.from.id;
                 
-                console.log(`✅ Оплата Stars успешна (webhook)!`);
+                console.log(`========================================`);
+                console.log(`✅ SUCCESSFUL PAYMENT RECEIVED!`);
+                console.log(`========================================`);
                 console.log(`   User: ${userId}`);
                 console.log(`   Amount: ${payment.total_amount} XTR`);
                 console.log(`   Payload: ${payment.invoice_payload}`);
@@ -127,6 +129,7 @@ function setupPaymentHandler(server) {
                 
                 // Выдать товар пользователю в БД
                 try {
+                    console.log(`🔄 Calling addItemToInventory...`);
                     const item = await addItemToInventory(
                         userId, 
                         payment.invoice_payload, 
