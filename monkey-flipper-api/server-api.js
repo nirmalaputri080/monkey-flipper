@@ -374,6 +374,15 @@ const gameResultLimiter = rateLimit({
             RAISE NOTICE 'Converting price column to DECIMAL...';
             ALTER TABLE purchases ALTER COLUMN price TYPE DECIMAL(20, 8);
           END IF;
+          
+          -- Добавляем колонку charge_id если её нет (для возврата Stars)
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name='purchases' AND column_name='charge_id'
+          ) THEN
+            RAISE NOTICE 'Adding charge_id column to purchases table...';
+            ALTER TABLE purchases ADD COLUMN charge_id TEXT;
+          END IF;
         END IF;
       END $$;
     `);
@@ -4537,7 +4546,7 @@ app.post('/api/admin/refund-stars', validateAdmin, async (req, res) => {
   try {
     // Находим покупку с charge_id
     const purchaseRes = await pool.query(`
-      SELECT id, user_id, item_name, price, nonce as charge_id, status
+      SELECT id, user_id, item_name, price, charge_id, status
       FROM purchases 
       WHERE id = $1 AND currency = 'XTR'
     `, [purchaseId]);

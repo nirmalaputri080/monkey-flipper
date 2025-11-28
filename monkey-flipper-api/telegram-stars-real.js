@@ -290,13 +290,13 @@ async function addItemToInventory(userId, payload, amount, chargeId = null) {
         `);
         console.log(`📊 Existing tables: ${tablesCheck.rows.map(r => r.table_name).join(', ')}`);
         
-        // Добавляем покупку в БД
-        console.log(`📝 Inserting purchase: ${purchaseId}, ${userId}, ${item.id}, ${item.name}, ${amount}`);
+        // Добавляем покупку в БД с charge_id для возможности возврата
+        console.log(`📝 Inserting purchase: ${purchaseId}, ${userId}, ${item.id}, ${item.name}, ${amount}, chargeId: ${chargeId}`);
         await client.query(`
-            INSERT INTO purchases (id, user_id, item_id, item_name, price, currency, status, purchased_at)
-            VALUES ($1, $2, $3, $4, $5, 'XTR', 'active', NOW())
-        `, [purchaseId, userId, item.id, item.name, amount]);
-        console.log(`✅ Purchase inserted`);
+            INSERT INTO purchases (id, user_id, item_id, item_name, price, currency, status, purchased_at, charge_id)
+            VALUES ($1, $2, $3, $4, $5, 'XTR', 'active', NOW(), $6)
+        `, [purchaseId, userId, item.id, item.name, amount, chargeId]);
+        console.log(`✅ Purchase inserted with charge_id`);
         
         // Записываем транзакцию с chargeId как nonce для защиты от дубликатов
         const txNonce = chargeId || `${payload}_${Date.now()}`; // Добавляем timestamp для уникальности
