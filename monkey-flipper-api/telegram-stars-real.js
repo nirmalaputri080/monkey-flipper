@@ -44,27 +44,34 @@ if (botToken) {
  * @param {string} itemName - Название товара
  * @param {string} itemDescription - Описание
  * @param {number} starsAmount - Сумма в Stars (XTR)
+ * @param {string} itemId - ID товара для идентификации
  * @returns {Promise<string>} - Invoice Link URL
  */
-async function createStarsInvoice(userId, itemName, itemDescription, starsAmount) {
+async function createStarsInvoice(userId, itemName, itemDescription, starsAmount, itemId = null) {
     if (!bot) {
         throw new Error('Telegram Bot не инициализирован');
     }
     
     try {
+        // Payload с userId И itemId для точной идентификации товара
+        const payload = itemId 
+            ? `purchase_${userId}_${itemId}_${Date.now()}`
+            : `purchase_${userId}_${Date.now()}`;
+        
         // Создаем ССЫЛКУ на инвойс (не отправляем сообщение!)
         // Это правильный способ для WebApp/Mini App
         const invoiceLink = await bot.createInvoiceLink(
             itemName,                    // title
             itemDescription,             // description
-            `purchase_${userId}_${Date.now()}`, // payload (с userId для идентификации)
+            payload,                     // payload (с userId и itemId для идентификации)
             '',                          // provider_token (пусто для Stars)
             'XTR',                       // currency (Telegram Stars)
             [{ label: itemName, amount: starsAmount }] // prices
         );
 
         console.log(`✅ Инвойс-ссылка создана: ${invoiceLink}`);
-        console.log(`   Stars: ${starsAmount}, Item: "${itemName}", User: ${userId}`);
+        console.log(`   Stars: ${starsAmount}, Item: "${itemName}" (${itemId}), User: ${userId}`);
+        console.log(`   Payload: ${payload}`);
         
         // invoiceLink имеет формат: https://t.me/$INVOICE_SLUG
         // tg.openInvoice() принимает полный URL
@@ -168,20 +175,47 @@ async function addItemToInventory(userId, payload, amount, chargeId = null) {
     const crypto = require('crypto');
     
     try {
-        // payload имеет формат: purchase_USERID_TIMESTAMP
-        // Нам нужно найти какой товар был куплен по цене
+        // payload имеет формат: purchase_USERID_ITEMID_TIMESTAMP или purchase_USERID_TIMESTAMP (старый)
         console.log(`🔍 Processing payment: userId=${userId}, payload=${payload}, amount=${amount}, chargeId=${chargeId}`);
         
-        // Загружаем товары чтобы найти по цене
+        // Парсим payload для извлечения itemId
+        const payloadParts = payload.split('_');
+        let itemId = null;
+        
+        // Новый формат: purchase_USERID_ITEMID_TIMESTAMP (4+ частей, itemId не является числом)
+        if (payloadParts.length >= 4 && isNaN(payloadParts[2])) {
+            // Собираем itemId (может содержать _ в названии)
+            // Формат: purchase_702659927_skin_ninja_monkey_1234567890
+            const timestampIndex = payloadParts.length - 1;
+            itemId = payloadParts.slice(2, timestampIndex).join('_');
+            console.log(`📦 Parsed itemId from payload: ${itemId}`);
+        }
+        
+        // Загружаем товары
         const shopItems = JSON.parse(fs.readFileSync('./shop-items.json', 'utf8'));
         const allItems = [...shopItems.skins, ...shopItems.nft_characters, ...shopItems.boosts];
         
-        // Ищем товар по цене в Stars (amount)
-        const item = allItems.find(i => i.priceXTR === amount);
+        let item;
+        
+        // Сначала ищем по itemId (если есть)
+        if (itemId) {
+            item = allItems.find(i => i.id === itemId);
+            if (item) {
+                console.log(`✅ Found item by ID: ${item.name} (${item.id})`);
+            }
+        }
+        
+        // Если не нашли по ID, ищем по цене (fallback для старых платежей)
+        if (!item) {
+            item = allItems.find(i => i.priceXTR === amount);
+            if (item) {
+                console.log(`⚠️ Found item by price fallback: ${item.name} (${amount} XTR)`);
+            }
+        }
         
         if (!item) {
-            console.error(`❌ Товар с ценой ${amount} XTR не найден`);
-            throw new Error(`Item with price ${amount} XTR not found`);
+            console.error(`❌ Товар не найден: itemId=${itemId}, amount=${amount} XTR`);
+            throw new Error(`Item not found: itemId=${itemId}, price=${amount} XTR`);
         }
         
         const purchaseId = crypto.randomUUID();

@@ -2537,12 +2537,13 @@ app.post('/api/shop/create-stars-invoice', validateShopAuth, async (req, res) =>
       });
     }
     
-    // Создаем инвойс через Telegram Bot API
+    // Создаем инвойс через Telegram Bot API (передаем itemId!)
     const invoice = await telegramStars.createStarsInvoice(
       userId,
       item.name,
       item.description,
-      item.priceXTR
+      item.priceXTR,
+      item.id  // Передаем itemId для точной идентификации товара при оплате
     );
     
     console.log(`✅ Инвойс создан: ${item.name} за ${item.priceXTR} XTR`);
