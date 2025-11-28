@@ -2458,8 +2458,8 @@ class GameScene extends Phaser.Scene {
     this.clingPlatform = null;
     this.playerStartY = 0; // НОВОЕ: Стартовая позиция игрока для расчета score
     this.clingSide = null;
-    this.rockets = 0;
-    this.extraLives = 0;
+    // REMOVED: rockets и extraLives удалены - мёртвый код, никогда не использовались
+    // Бустовая система работает через серверные equipped_items
     this.maxReachedY = Infinity; // НОВОЕ: Максимальная высота игрока (меньше = выше, т.к. Y инвертирован)
     this.rocketActive = false;
     this.previousAnimKey = null;
@@ -2568,9 +2568,8 @@ class GameScene extends Phaser.Scene {
             console.log('🎮 Solo режим');
         }
         
-        // НОВОЕ: Загружаем бусты из localStorage перед стартом игры
-        this.rockets = parseInt(localStorage.getItem('rockets')) || 0;
-        this.extraLives = parseInt(localStorage.getItem('extraLives')) || 0;
+        // Бусты загружаются с сервера через loadEquippedItems()
+        // Старая localStorage система (rockets, extraLives) удалена как небезопасная
 
         // Сбрасываем счетчики
         this.score = 0;
@@ -4429,30 +4428,9 @@ class GameScene extends Phaser.Scene {
     this.refactorPlatforms();
     this.checkGameOver();
     
-    // УБРАНО: Логика зацепления за бока (clingPlatform) полностью удалена
-    if (Phaser.Input.Keyboard.JustDown(this.rKey) && this.rockets > 0 && !this.rocketActive) {
-        this.rocketActive = true;
-        this.rockets -= 1;
-        localStorage.setItem('rockets', this.rockets);
-        this.physics.world.removeCollider(this.collider);
-        this.player.body.setAllowGravity(false);
-        const rocketSpeed = - (500 * CONSTS.SCORE_HEIGHT_INCREMENT) / (2000 / 1000);
-        this.player.setVelocityY(rocketSpeed);
-        this.player.anims.stop();
-        this.player.setTexture('monkey_up'); // ФИКС: Статичная текстура для ракеты
-        this.time.delayedCall(2000, () => {
-            this.rocketActive = false;
-            this.player.setVelocityY(CONSTS.JUMP_VELOCITY / 2);
-            this.player.body.setAllowGravity(true);
-            this.collider = this.physics.add.collider(this.player, this.platforms, this.handlePlayerPlatformCollision, null, this);
-            const overlappedPlatform = this.platforms.children.entries.find(platform => this.physics.overlap(this.player, platform));
-            if (overlappedPlatform) {
-                this.player.y = overlappedPlatform.y - (overlappedPlatform.displayHeight / 2) - (this.player.displayHeight / 2) - 1;
-                this.player.setVelocityY(0);
-            }
-            this.refactorPlatforms();
-        });
-    }
+    // REMOVED: Старая система ракет (rockets) удалена как небезопасная
+    // Бусты теперь работают через серверную систему equipped_items
+    
     const currentStanding = this.getStandingPlatform();
     // УБРАНО: currentCling теперь всегда null (зацепление отключено)
     const wasOnPlatform = this.previousStandingPlatform;

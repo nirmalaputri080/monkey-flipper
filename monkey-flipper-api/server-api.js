@@ -14,7 +14,12 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // JWT Secret (в production должен быть в .env)
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    console.error('❌ CRITICAL: JWT_SECRET environment variable is not set!');
+    console.error('   Generate one with: node -e "console.log(require(\'crypto\').randomBytes(64).toString(\'hex\'))"');
+    process.exit(1);
+}
 const BOT_TOKEN = process.env.BOT_TOKEN || ''; // Telegram Bot Token
 
 // ==================== ENHANCED CORS SECURITY ====================
