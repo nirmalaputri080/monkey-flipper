@@ -4464,6 +4464,15 @@ app.post('/api/admin/refund-by-payload', validateAdmin, async (req, res) => {
         'INSERT INTO refunded_stars (transaction_id, user_id, refunded_at) VALUES ($1, $2, NOW())',
         [transactionId, userId]
       );
+      // Также помечаем связанные покупки как refunded (если есть purchase с таким charge_id)
+      try {
+        await pool.query(
+          `UPDATE purchases SET status = 'refunded' WHERE charge_id = $1`,
+          [transactionId]
+        );
+      } catch (e) {
+        console.error('Failed to update purchases for refunded_stars:', e.message);
+      }
       
       console.log(`✅ Возврат успешен: userId=${userId}`);
       res.json({ success: true, message: `Stars успешно возвращены пользователю ${userId}` });
@@ -4474,6 +4483,12 @@ app.post('/api/admin/refund-by-payload', validateAdmin, async (req, res) => {
           'INSERT INTO refunded_stars (transaction_id, user_id, refunded_at) VALUES ($1, $2, NOW()) ON CONFLICT DO NOTHING',
           [transactionId, userId]
         );
+        // Обновим purchases на случай, если ранее не обновили
+        try {
+          await pool.query(`UPDATE purchases SET status = 'refunded' WHERE charge_id = $1`, [transactionId]);
+        } catch (e) {
+          console.error('Failed to update purchases for already refunded case:', e.message);
+        }
         return res.json({ success: false, error: 'Транзакция уже была возвращена ранее' });
       }
       
@@ -4590,11 +4605,20 @@ app.post('/api/admin/refund-stars', validateAdmin, async (req, res) => {
 app.get('/api/admin/stars-purchases', validateAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT id, user_id, item_id, item_name, price, status, purchased_at,
-             CASE WHEN status != 'refunded' THEN true ELSE false END as can_refund
-      FROM purchases 
-      WHERE currency = 'XTR'
-      ORDER BY purchased_at DESC 
+      SELECT p.id,
+             p.user_id,
+             p.item_id,
+             p.item_name,
+             p.price,
+             -- Если purchase помечен refunded или есть запись в refunded_stars для этого charge_id, считаем возвращённым
+             CASE WHEN p.status = 'refunded' OR rs.transaction_id IS NOT NULL THEN 'refunded' ELSE p.status END as status,
+             p.purchased_at,
+             CASE WHEN (p.status != 'refunded' AND rs.transaction_id IS NULL) THEN true ELSE false END as can_refund,
+             rs.transaction_id as refunded_txn
+      FROM purchases p
+      LEFT JOIN refunded_stars rs ON p.charge_id = rs.transaction_id
+      WHERE p.currency = 'XTR'
+      ORDER BY p.purchased_at DESC
       LIMIT 50
     `);
     
