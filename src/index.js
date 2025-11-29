@@ -1627,6 +1627,17 @@ class DuelHistoryScene extends Phaser.Scene {
         // Загружаем историю
         this.loadDuelHistory(userData.id, historyHeight);
         
+        // НОВОЕ: Автообновление истории каждые 5 секунд
+        // Чтобы создатель видел когда соперник принял вызов
+        this.historyRefreshTimer = this.time.addEvent({
+            delay: 5000,
+            loop: true,
+            callback: () => {
+                console.log('🔄 Auto-refresh duel history');
+                this.loadDuelHistory(userData.id, historyHeight);
+            }
+        });
+        
         // Обработка скролла - свайп и колесо
         this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
             if (pointer.y > historyStartY) {
@@ -1666,7 +1677,11 @@ class DuelHistoryScene extends Phaser.Scene {
             120, 45,
             '← Назад',
             0x34495e, 0x4a6278,
-            () => this.scene.start('MenuScene'),
+            () => {
+                // Останавливаем автообновление при выходе
+                if (this.historyRefreshTimer) this.historyRefreshTimer.remove();
+                this.scene.start('MenuScene');
+            },
             '16px'
         );
         
@@ -2107,6 +2122,8 @@ class DuelHistoryScene extends Phaser.Scene {
                 
                 setTimeout(() => {
                     loadingText.destroy();
+                    // Останавливаем автообновление при выходе
+                    if (this.historyRefreshTimer) this.historyRefreshTimer.remove();
                     this.scene.start('GameScene', {
                         mode: 'duel',
                         matchId: matchId,
@@ -2289,6 +2306,8 @@ class DuelHistoryScene extends Phaser.Scene {
                     }).setOrigin(0.5);
                     
                     playBtn.on('pointerdown', () => {
+                        // Останавливаем автообновление при выходе
+                        if (this.historyRefreshTimer) this.historyRefreshTimer.remove();
                         // Запускаем игру в режиме дуэли
                         this.scene.start('GameScene', {
                             mode: 'duel',
