@@ -1743,24 +1743,11 @@ class DuelHistoryScene extends Phaser.Scene {
             
             const data = await response.json();
             
-            loadingText.setText('✅ Вызов создан! Запуск игры...');
+            loadingText.destroy();
             
-            // ВАЖНО: Сохраняем данные дуэли для показа диалога после игры
-            this.lastCreatedDuel = data;
-            
-            // Автоматически запускаем игру для создателя
-            setTimeout(() => {
-                loadingText.destroy();
-                
-                // Запускаем игру в режиме дуэли для создателя (player1)
-                this.scene.start('GameScene', {
-                    mode: 'duel',
-                    matchId: data.matchId,
-                    seed: data.seed,
-                    isCreator: true, // Флаг что это создатель
-                    opponentUsername: 'Ожидание соперника...'
-                });
-            }, 1000);
+            // НОВАЯ ЛОГИКА: Показываем диалог для отправки ссылки БЕЗ запуска игры
+            // Игра начнется только когда соперник примет вызов
+            this.showShareDialog(data);
             
         } catch (error) {
             console.error('❌ Ошибка создания вызова:', error);
@@ -1769,6 +1756,9 @@ class DuelHistoryScene extends Phaser.Scene {
     }
     
     showShareDialog(duelData) {
+        // Сохраняем данные дуэли для дальнейшего использования
+        this.lastCreatedDuel = duelData;
+        
         // Затемнение фона
         const overlay = this.add.rectangle(
             0, 0, 
@@ -1782,16 +1772,16 @@ class DuelHistoryScene extends Phaser.Scene {
         const dialog = this.add.rectangle(
             CONSTS.WIDTH / 2,
             CONSTS.HEIGHT / 2,
-            CONSTS.WIDTH - 80,
-            400,
+            CONSTS.WIDTH - 60,
+            450,
             0x2c3e50
         ).setStrokeStyle(4, 0xFFD700).setDepth(0);
         
         // Заголовок
         const titleText = this.add.text(
             CONSTS.WIDTH / 2,
-            CONSTS.HEIGHT / 2 - 150,
-            '✅ Вызов создан!',
+            CONSTS.HEIGHT / 2 - 180,
+            '⚔️ Вызов создан!',
             {
                 fontSize: '28px',
                 fill: '#FFD700',
@@ -1799,18 +1789,32 @@ class DuelHistoryScene extends Phaser.Scene {
             }
         ).setOrigin(0.5).setDepth(1);
         
-        // Информация
-        const infoText = this.add.text(
+        // НОВОЕ: Объяснение честной игры
+        const explainText = this.add.text(
             CONSTS.WIDTH / 2,
-            CONSTS.HEIGHT / 2 - 80,
-            `ID матча: ${duelData.matchId}\n` +
-            `Истекает: ${new Date(duelData.expiresAt).toLocaleString()}`,
+            CONSTS.HEIGHT / 2 - 120,
+            '📋 Отправь ссылку другу!\nКогда он примет вызов,\nвы оба сыграете по 1 разу.',
             {
-                fontSize: '14px',
-                fill: '#FFFFFF',
+                fontSize: '16px',
+                fill: '#2ecc71',
                 fontFamily: 'Arial',
                 align: 'center',
-                lineSpacing: 8
+                lineSpacing: 4
+            }
+        ).setOrigin(0.5).setDepth(1);
+        
+        // Информация о матче
+        const infoText = this.add.text(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 - 40,
+            `ID: ${duelData.matchId.split('_').slice(1).join('_')}\n` +
+            `Истекает: ${new Date(duelData.expiresAt).toLocaleString()}`,
+            {
+                fontSize: '13px',
+                fill: '#aaaaaa',
+                fontFamily: 'Arial',
+                align: 'center',
+                lineSpacing: 6
             }
         ).setOrigin(0.5).setDepth(1);
         
@@ -1891,20 +1895,21 @@ class DuelHistoryScene extends Phaser.Scene {
                 
                 // Показываем подтверждение
                 tg.showPopup({
-                    title: '✅ Вызов отправлен!',
-                    message: 'Начинаем игру...',
+                    title: '✅ Ссылка отправлена!',
+                    message: 'Когда друг примет вызов, ты сможешь начать игру в разделе "Дуэли"',
                     buttons: [{ type: 'ok' }]
                 });
             } else {
                 // Fallback для веба: копируем ссылку
                 navigator.clipboard?.writeText(duelData.duelLink);
-                alert('🔗 Ссылка скопирована!\n\nОтправьте её другу для начала дуэли!');
+                alert('🔗 Ссылка скопирована!\n\nОтправьте её другу!\nКогда он примет, можно будет играть.');
             }
             
             // Уничтожаем все элементы диалога
             overlay.destroy();
             dialog.destroy();
             titleText.destroy();
+            explainText.destroy();
             infoText.destroy();
             copyIdBtn.destroy();
             copyIdText.destroy();
@@ -1912,6 +1917,9 @@ class DuelHistoryScene extends Phaser.Scene {
             shareText.destroy();
             closeBtn.destroy();
             closeText.destroy();
+            
+            // Обновляем историю дуэлей
+            this.loadDuelHistory(getTelegramUserId().id);
         });
         
         // Кнопка "Close"
@@ -1938,6 +1946,7 @@ class DuelHistoryScene extends Phaser.Scene {
             overlay.destroy();
             dialog.destroy();
             titleText.destroy();
+            explainText.destroy();
             infoText.destroy();
             copyIdBtn.destroy();
             copyIdText.destroy();
@@ -2173,7 +2182,7 @@ class DuelHistoryScene extends Phaser.Scene {
                 return;
             }
             
-            const cardHeight = 75;
+            const cardHeight = 90; // Увеличили высоту для кнопок
             const cardGap = 10;
             const cardWidth = CONSTS.WIDTH - 40;
             
@@ -2190,17 +2199,30 @@ class DuelHistoryScene extends Phaser.Scene {
                 let statusText = 'Ожидание';
                 let cardColor = 0x3d4663;
                 let accentColor = 0xf39c12;
+                let canPlay = false;
+                let canShare = false;
                 
                 if (duel.status === 'pending') {
                     statusIcon = '⏳';
-                    statusText = 'Ожидание';
+                    statusText = 'Ждёт соперника';
                     cardColor = 0x3d4663;
                     accentColor = 0xf39c12;
+                    canShare = isPlayer1; // Создатель может поделиться
                 } else if (duel.status === 'active') {
-                    statusIcon = '🎮';
-                    statusText = 'Играет';
-                    cardColor = 0x2d4a7c;
-                    accentColor = 0x3498db;
+                    // Проверяем, играл ли уже этот игрок
+                    const alreadyPlayed = myScore !== null;
+                    if (alreadyPlayed) {
+                        statusIcon = '⏳';
+                        statusText = 'Ждёт соперника';
+                        cardColor = 0x2d4a7c;
+                        accentColor = 0x3498db;
+                    } else {
+                        statusIcon = '🎮';
+                        statusText = 'Можно играть!';
+                        cardColor = 0x1e5631;
+                        accentColor = 0x2ecc71;
+                        canPlay = true;
+                    }
                 } else if (duel.status === 'completed') {
                     const won = duel.winner === userId;
                     const draw = duel.winner === 'draw';
@@ -2225,12 +2247,12 @@ class DuelHistoryScene extends Phaser.Scene {
                 cardBg.fillRoundedRect(20, y, 5, cardHeight, { tl: 10, bl: 10, tr: 0, br: 0 });
                 
                 // Иконка статуса
-                const icon = this.add.text(45, y + cardHeight/2, statusIcon, {
+                const icon = this.add.text(45, y + 25, statusIcon, {
                     fontSize: '28px'
                 }).setOrigin(0, 0.5);
                 
                 // Имя соперника
-                const nameText = this.add.text(85, y + 18, `vs ${opponentName}`, {
+                const nameText = this.add.text(85, y + 12, `vs ${opponentName}`, {
                     fontSize: '16px',
                     fill: '#FFFFFF',
                     fontFamily: 'Arial Black'
@@ -2239,34 +2261,84 @@ class DuelHistoryScene extends Phaser.Scene {
                 // Счёт
                 const scoreStr = (myScore !== null && opponentScore !== null) 
                     ? `${myScore} : ${opponentScore}` 
-                    : '— : —';
-                const scoreText = this.add.text(85, y + 45, scoreStr, {
+                    : (myScore !== null ? `${myScore} : ?` : '— : —');
+                const scoreText = this.add.text(85, y + 35, scoreStr, {
                     fontSize: '14px',
                     fill: '#aaaacc',
                     fontFamily: 'Arial'
                 });
                 
                 // Статус справа
-                const statusLabel = this.add.text(CONSTS.WIDTH - 35, y + cardHeight/2, statusText, {
-                    fontSize: '12px',
+                const statusLabel = this.add.text(CONSTS.WIDTH - 35, y + 20, statusText, {
+                    fontSize: '11px',
                     fill: Phaser.Display.Color.IntegerToColor(accentColor).rgba,
                     fontFamily: 'Arial Black'
                 }).setOrigin(1, 0.5);
                 
+                this.historyContainer.add([cardBg, icon, nameText, scoreText, statusLabel]);
+                
+                // НОВОЕ: Кнопка действия
+                if (canPlay) {
+                    // Кнопка "ИГРАТЬ"
+                    const playBtn = this.add.rectangle(CONSTS.WIDTH - 80, y + 60, 100, 28, 0x27ae60)
+                        .setInteractive({ useHandCursor: true });
+                    const playBtnText = this.add.text(CONSTS.WIDTH - 80, y + 60, '▶ ИГРАТЬ', {
+                        fontSize: '12px',
+                        fill: '#FFFFFF',
+                        fontFamily: 'Arial Black'
+                    }).setOrigin(0.5);
+                    
+                    playBtn.on('pointerdown', () => {
+                        // Запускаем игру в режиме дуэли
+                        this.scene.start('GameScene', {
+                            mode: 'duel',
+                            matchId: duel.match_id,
+                            seed: duel.seed,
+                            isCreator: isPlayer1,
+                            opponentUsername: opponentName
+                        });
+                    });
+                    
+                    this.historyContainer.add([playBtn, playBtnText]);
+                } else if (canShare) {
+                    // Кнопка "ПОДЕЛИТЬСЯ" для pending дуэлей
+                    const shareBtn = this.add.rectangle(CONSTS.WIDTH - 85, y + 60, 110, 28, 0x0088cc)
+                        .setInteractive({ useHandCursor: true });
+                    const shareBtnText = this.add.text(CONSTS.WIDTH - 85, y + 60, '📤 ОТПРАВИТЬ', {
+                        fontSize: '11px',
+                        fill: '#FFFFFF',
+                        fontFamily: 'Arial Black'
+                    }).setOrigin(0.5);
+                    
+                    shareBtn.on('pointerdown', () => {
+                        const duelLink = `https://t.me/monkey_test_crypto_bot/monkeytest?startapp=${duel.match_id}`;
+                        const shareText = `🐵 Вызываю тебя на дуэль в Crypto Monkey! Прими вызов! 🏆`;
+                        
+                        if (window.Telegram?.WebApp) {
+                            window.Telegram.WebApp.openTelegramLink(
+                                `https://t.me/share/url?url=${encodeURIComponent(duelLink)}&text=${encodeURIComponent(shareText)}`
+                            );
+                        } else {
+                            navigator.clipboard?.writeText(duelLink);
+                            alert('Ссылка скопирована!');
+                        }
+                    });
+                    
+                    this.historyContainer.add([shareBtn, shareBtnText]);
+                }
+                
                 // Время (если завершена)
-                if (duel.duration_seconds) {
+                if (duel.duration_seconds && !canPlay && !canShare) {
                     const mins = Math.floor(duel.duration_seconds / 60);
                     const secs = Math.floor(duel.duration_seconds % 60);
                     const timeStr = mins > 0 ? `${mins}м ${secs}с` : `${secs}с`;
-                    const timeText = this.add.text(CONSTS.WIDTH - 35, y + cardHeight/2 + 15, `⏱ ${timeStr}`, {
+                    const timeText = this.add.text(CONSTS.WIDTH - 35, y + 65, `⏱ ${timeStr}`, {
                         fontSize: '11px',
                         fill: '#666688',
                         fontFamily: 'Arial'
                     }).setOrigin(1, 0.5);
                     this.historyContainer.add(timeText);
                 }
-                
-                this.historyContainer.add([cardBg, icon, nameText, scoreText, statusLabel]);
             });
             
             // Рассчитываем максимальный скролл
@@ -3943,7 +4015,7 @@ class GameScene extends Phaser.Scene {
         }
     }
     
-    // НОВОЕ: Экран ожидания результата соперника
+    // Экран ожидания результата соперника (после игры)
     showWaitingForOpponent(myScore) {
         // Создаем overlay поверх Game Over экрана
         const overlay = this.add.rectangle(
@@ -3954,120 +4026,14 @@ class GameScene extends Phaser.Scene {
             0.9
         ).setOrigin(0, 0).setScrollFactor(0).setDepth(20);
         
-        // Если это создатель челленджа - показываем кнопку Share
-        if (this.isCreator) {
-            // Заголовок
-            this.add.text(
-                CONSTS.WIDTH / 2,
-                CONSTS.HEIGHT / 2 - 150,
-                '✅ Challenge Complete!',
-                {
-                    fontSize: '28px',
-                    fill: '#2ecc71',
-                    fontFamily: 'Arial Black',
-                    stroke: '#000',
-                    strokeThickness: 4
-                }
-            ).setOrigin(0.5).setScrollFactor(0).setDepth(21);
-            
-            // Твой результат
-            this.add.text(
-                CONSTS.WIDTH / 2,
-                CONSTS.HEIGHT / 2 - 80,
-                `Your score: ${myScore}`,
-                {
-                    fontSize: '24px',
-                    fill: '#FFD700',
-                    fontFamily: 'Arial Black'
-                }
-            ).setOrigin(0.5).setScrollFactor(0).setDepth(21);
-            
-            // Информация
-            this.add.text(
-                CONSTS.WIDTH / 2,
-                CONSTS.HEIGHT / 2 - 20,
-                'Now share this challenge\nwith your friend!',
-                {
-                    fontSize: '18px',
-                    fill: '#FFFFFF',
-                    fontFamily: 'Arial',
-                    align: 'center',
-                    lineSpacing: 5
-                }
-            ).setOrigin(0.5).setScrollFactor(0).setDepth(21);
-            
-            // Кнопка "Share in Telegram"
-            const shareBtn = this.add.rectangle(
-                CONSTS.WIDTH / 2,
-                CONSTS.HEIGHT / 2 + 50,
-                280,
-                60,
-                0x0088cc
-            ).setInteractive({ useHandCursor: true }).setScrollFactor(0).setDepth(21);
-            
-            this.add.text(
-                CONSTS.WIDTH / 2,
-                CONSTS.HEIGHT / 2 + 50,
-                '📤 Share in Telegram',
-                {
-                    fontSize: '20px',
-                    fill: '#FFFFFF',
-                    fontFamily: 'Arial Black'
-                }
-            ).setOrigin(0.5).setScrollFactor(0).setDepth(21);
-            
-            shareBtn.on('pointerdown', () => {
-                // Формируем ссылку для шаринга
-                const duelLink = `https://t.me/monkey_test_crypto_bot/monkeytest?startapp=${this.matchId}`;
-                const shareText = `🐵 I challenge you to a duel in Crypto Monkey! My score: ${myScore}. Can you beat it?`;
-                
-                if (window.Telegram?.WebApp) {
-                    window.Telegram.WebApp.openTelegramLink(
-                        `https://t.me/share/url?url=${encodeURIComponent(duelLink)}&text=${encodeURIComponent(shareText)}`
-                    );
-                } else {
-                    // Fallback: копируем ссылку
-                    navigator.clipboard?.writeText(duelLink);
-                    alert('Link copied to clipboard!');
-                }
-            });
-            
-            // Кнопка "Back to Menu"
-            const menuBtn = this.add.rectangle(
-                CONSTS.WIDTH / 2,
-                CONSTS.HEIGHT / 2 + 130,
-                200,
-                50,
-                0x34495e
-            ).setInteractive({ useHandCursor: true }).setScrollFactor(0).setDepth(21);
-            
-            this.add.text(
-                CONSTS.WIDTH / 2,
-                CONSTS.HEIGHT / 2 + 130,
-                '← Back to Menu',
-                {
-                    fontSize: '18px',
-                    fill: '#FFFFFF',
-                    fontFamily: 'Arial'
-                }
-            ).setOrigin(0.5).setScrollFactor(0).setDepth(21);
-            
-            menuBtn.on('pointerdown', () => {
-                this.scene.start('MenuScene');
-            });
-            
-            return; // Не показываем экран ожидания
-        }
-        
-        // Обычный экран ожидания для принявшего челлендж
         // Заголовок
         this.add.text(
             CONSTS.WIDTH / 2,
-            CONSTS.HEIGHT / 2 - 100,
-            '⏳ Ожидание соперника...',
+            CONSTS.HEIGHT / 2 - 120,
+            '✅ Игра завершена!',
             {
-                fontSize: '32px',
-                fill: '#FFD700',
+                fontSize: '28px',
+                fill: '#2ecc71',
                 fontFamily: 'Arial Black',
                 stroke: '#000',
                 strokeThickness: 4
@@ -4077,22 +4043,35 @@ class GameScene extends Phaser.Scene {
         // Твой результат
         this.add.text(
             CONSTS.WIDTH / 2,
-            CONSTS.HEIGHT / 2,
+            CONSTS.HEIGHT / 2 - 60,
             `Ваш счёт: ${myScore}`,
             {
                 fontSize: '24px',
+                fill: '#FFD700',
+                fontFamily: 'Arial Black'
+            }
+        ).setOrigin(0.5).setScrollFactor(0).setDepth(21);
+        
+        // Информация об ожидании
+        this.add.text(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2,
+            '⏳ Ожидание результата соперника...',
+            {
+                fontSize: '16px',
                 fill: '#FFFFFF',
-                fontFamily: 'Arial'
+                fontFamily: 'Arial',
+                align: 'center'
             }
         ).setOrigin(0.5).setScrollFactor(0).setDepth(21);
         
         // Анимация точек
         const dotsText = this.add.text(
             CONSTS.WIDTH / 2,
-            CONSTS.HEIGHT / 2 + 60,
+            CONSTS.HEIGHT / 2 + 40,
             '.',
             {
-                fontSize: '48px',
+                fontSize: '36px',
                 fill: '#FFD700',
                 fontFamily: 'Arial Black'
             }
@@ -4108,8 +4087,34 @@ class GameScene extends Phaser.Scene {
             }
         });
         
+        // Кнопка "К дуэлям" для проверки позже
+        const menuBtn = this.add.rectangle(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 + 120,
+            220,
+            50,
+            0x34495e
+        ).setInteractive({ useHandCursor: true }).setScrollFactor(0).setDepth(21);
+        
+        this.add.text(
+            CONSTS.WIDTH / 2,
+            CONSTS.HEIGHT / 2 + 120,
+            '← К списку дуэлей',
+            {
+                fontSize: '16px',
+                fill: '#FFFFFF',
+                fontFamily: 'Arial'
+            }
+        ).setOrigin(0.5).setScrollFactor(0).setDepth(21);
+        
+        menuBtn.on('pointerdown', () => {
+            dotsTimer.remove();
+            if (this.checkTimer) this.checkTimer.remove();
+            this.scene.start('DuelHistoryScene');
+        });
+        
         // Опрос API каждые 3 секунды
-        const checkTimer = this.time.addEvent({
+        this.checkTimer = this.time.addEvent({
             delay: 3000,
             loop: true,
             callback: async () => {
@@ -4118,12 +4123,9 @@ class GameScene extends Phaser.Scene {
                     const data = await response.json();
                     
                     if (data.duel.status === 'completed') {
-                        // Второй игрок завершил!
+                        // Оба игрока завершили!
                         dotsTimer.remove();
-                        checkTimer.remove();
-                        
-                        overlay.destroy();
-                        dotsText.destroy();
+                        this.checkTimer.remove();
                         
                         const result = {
                             completed: true,
@@ -4139,35 +4141,9 @@ class GameScene extends Phaser.Scene {
                 }
             }
         });
-        
-        // Кнопка "Back to Menu" (если долго ждать)
-        const backBtn = this.add.rectangle(
-            CONSTS.WIDTH / 2,
-            CONSTS.HEIGHT / 2 + 140,
-            200,
-            50,
-            0x34495e
-        ).setInteractive({ useHandCursor: true }).setScrollFactor(0).setDepth(21);
-        
-        this.add.text(
-            CONSTS.WIDTH / 2,
-            CONSTS.HEIGHT / 2 + 140,
-            'Back to Menu',
-            {
-                fontSize: '18px',
-                fill: '#FFFFFF',
-                fontFamily: 'Arial'
-            }
-        ).setOrigin(0.5).setScrollFactor(0).setDepth(21);
-        
-        backBtn.on('pointerdown', () => {
-            dotsTimer.remove();
-            checkTimer.remove();
-            this.scene.start('MenuScene');
-        });
     }
     
-    // НОВОЕ: Показать результаты дуэли
+    // Показать результаты дуэли
     showDuelResults(result) {
         const userData = getTelegramUserId();
         const isPlayer1 = result.score1 !== null && result.score1 !== undefined;

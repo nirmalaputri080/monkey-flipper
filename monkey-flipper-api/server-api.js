@@ -1016,6 +1016,103 @@ app.get('/api/duel/:matchId', async (req, res) => {
   }
 });
 
+// НОВОЕ: Проверить, может ли игрок начать игру в дуэли
+// Игрок может играть только если:
+// 1. Дуэль в статусе 'active' (соперник принял)
+// 2. Игрок ещё не играл (его score === null)
+app.get('/api/duel/:matchId/canPlay/:playerId', async (req, res) => {
+  const { matchId, playerId } = req.params;
+  
+  try {
+    const result = await pool.query('SELECT * FROM duels WHERE match_id = $1', [matchId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, canPlay: false, error: 'Дуэль не найдена' });
+    }
+    
+    const duel = result.rows[0];
+    
+    // Определяем какой это игрок
+    const isPlayer1 = duel.player1_id === playerId;
+    const isPlayer2 = duel.player2_id === playerId;
+    
+    if (!isPlayer1 && !isPlayer2) {
+      return res.json({ success: true, canPlay: false, reason: 'not_participant', message: 'Вы не участник этой дуэли' });
+    }
+    
+    // Проверяем статус дуэли
+    if (duel.status === 'pending') {
+      return res.json({ 
+        success: true, 
+        canPlay: false, 
+        reason: 'waiting_opponent',
+        message: 'Ожидание соперника. Отправьте ссылку другу!',
+        duel: {
+          matchId: duel.match_id,
+          status: duel.status,
+          opponentUsername: isPlayer1 ? null : duel.player1_username,
+          isCreator: isPlayer1
+        }
+      });
+    }
+    
+    if (duel.status === 'completed') {
+      return res.json({ 
+        success: true, 
+        canPlay: false, 
+        reason: 'completed',
+        message: 'Дуэль уже завершена',
+        duel: {
+          matchId: duel.match_id,
+          status: duel.status,
+          score1: duel.score1,
+          score2: duel.score2,
+          winner: duel.winner
+        }
+      });
+    }
+    
+    if (duel.status === 'expired') {
+      return res.json({ success: true, canPlay: false, reason: 'expired', message: 'Дуэль истекла' });
+    }
+    
+    // Статус 'active' - проверяем, играл ли уже этот игрок
+    const alreadyPlayed = isPlayer1 ? duel.score1 !== null : duel.score2 !== null;
+    
+    if (alreadyPlayed) {
+      return res.json({ 
+        success: true, 
+        canPlay: false, 
+        reason: 'already_played',
+        message: 'Вы уже сыграли в этой дуэли. Ожидание результата соперника.',
+        duel: {
+          matchId: duel.match_id,
+          status: duel.status,
+          myScore: isPlayer1 ? duel.score1 : duel.score2,
+          opponentPlayed: isPlayer1 ? duel.score2 !== null : duel.score1 !== null
+        }
+      });
+    }
+    
+    // Всё ОК - игрок может играть!
+    return res.json({ 
+      success: true, 
+      canPlay: true,
+      duel: {
+        matchId: duel.match_id,
+        seed: duel.seed,
+        status: duel.status,
+        opponentUsername: isPlayer1 ? duel.player2_username : duel.player1_username,
+        isCreator: isPlayer1
+      }
+    });
+    
+  } catch (err) {
+    console.error('canPlay check error', err);
+    return res.status(500).json({ success: false, canPlay: false, error: 'DB error' });
+  }
+});
+
 // Принять вызов на дуэль
 app.post('/api/duel/:matchId/accept', async (req, res) => {
   const { matchId } = req.params;
@@ -1083,12 +1180,32 @@ app.post('/api/duel/:matchId/complete', async (req, res) => {
     
     const duel = result.rows[0];
     
+    // Проверяем статус дуэли
+    if (duel.status !== 'active') {
+      return res.status(400).json({ 
+        success: false, 
+        error: duel.status === 'pending' 
+          ? 'Дуэль ещё не началась. Ожидание соперника.' 
+          : 'Дуэль уже завершена'
+      });
+    }
+    
     // Определяем какой игрок завершил
     const isPlayer1 = duel.player1_id === playerId;
     const isPlayer2 = duel.player2_id === playerId;
     
     if (!isPlayer1 && !isPlayer2) {
       return res.status(400).json({ success: false, error: 'Player not in this duel' });
+    }
+    
+    // НОВОЕ: Проверяем что игрок ещё не играл (одна попытка!)
+    const alreadyPlayed = isPlayer1 ? duel.score1 !== null : duel.score2 !== null;
+    if (alreadyPlayed) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Вы уже сыграли в этой дуэли. Результат записан.',
+        existingScore: isPlayer1 ? duel.score1 : duel.score2
+      });
     }
     
     // Обновляем счет игрока
