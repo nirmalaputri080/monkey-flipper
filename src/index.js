@@ -3241,8 +3241,8 @@ class GameScene extends Phaser.Scene {
             // НОВОЕ: Назначаем тип платформы
             platform.platformType = this.choosePlatformType();
             
-            // ФИКС: Первый шар всегда синий (нелопающийся)
-            if (i === 0) {
+            // ФИКС: Первый шар всегда синий (нелопающийся) - i начинается с 1!
+            if (i === 1) {
                 platform.platformType = 'unbreakable';
             }
             
@@ -3255,9 +3255,10 @@ class GameScene extends Phaser.Scene {
             }
             
             // НОВОЕ: Настройка для нелопающихся платформ (синий цвет)
+            // ФИКС: Единый масштаб 1.8x1.5 для консистентности
             if (platform.platformType === 'unbreakable') {
                 platform.setTexture('balloon_unbreakable');
-                platform.setScale(59/30, 110/73);
+                platform.setScale(1.8, 1.5);
             }
             
             this.setupPlatformBody(platform); // ФИКС: Вызов функции
@@ -3554,8 +3555,8 @@ class GameScene extends Phaser.Scene {
             platformObj.isLanded = true;
         }
         
-        // ФИКС: СРАЗУ ставим smash при прыжке (не ждём update())
-        if (!platformObj.smashStartTime) {
+        // ФИКС #5: Ставим smash только если ещё не установлен И платформа не unbreakable
+        if (!platformObj.smashStartTime && platformObj.platformType !== 'unbreakable') {
             console.log('🎯 Автопрыжок! Сразу ставим smash, платформа:', platformObj.texture.key);
             platformObj.setTexture('balloon_smash');
             platformObj.smashStartTime = this.time.now;
@@ -4530,7 +4531,7 @@ class GameScene extends Phaser.Scene {
 
     // НОВОЕ: Метод для обновления движения платформ
     updateMovingPlatforms() {
-        let anyPlatformMoved = false; // ФИКС: Флаг - двигалась ли хоть одна платформа
+        let anyPlatformMoved = false;
         
         this.platforms.children.entries.forEach(platform => {
             // Двигаем только платформы типа 'moving', которые не приземлились
@@ -4543,26 +4544,25 @@ class GameScene extends Phaser.Scene {
                 const rightBound = platform.initialX + platform.moveRange / 2;
                 
                 if (newX <= leftBound) {
-                    // Достигли левой границы - меняем направление
                     platform.x = leftBound;
-                    platform.moveDirection = 1; // Меняем на вправо
-                    anyPlatformMoved = true;
+                    platform.moveDirection = 1;
                 } else if (newX >= rightBound) {
-                    // Достигли правой границы - меняем направление
                     platform.x = rightBound;
-                    platform.moveDirection = -1; // Меняем на влево
-                    anyPlatformMoved = true;
+                    platform.moveDirection = -1;
                 } else {
-                    // Продолжаем движение
                     platform.x = newX;
-                    anyPlatformMoved = true;
                 }
+                
+                // ФИКС #3: Обновляем только body этой конкретной платформы (оптимизация)
+                platform.refreshBody();
+                anyPlatformMoved = true;
             }
         });
         
-        // ФИКС: Обновляем физическое тело ОДИН РАЗ для всех платформ (не в цикле!)
-        if (anyPlatformMoved) {
-            this.platforms.refresh();
+        // Логируем только при первом движении для отладки
+        if (anyPlatformMoved && !this._movingLogged) {
+            console.log('🟢 Движущиеся платформы активны');
+            this._movingLogged = true;
         }
     }
 
@@ -4621,24 +4621,22 @@ class GameScene extends Phaser.Scene {
         
         // Перерабатываем оставшиеся платформы
         platformsToRecycle.forEach(platform => {
-
-            
-            // ФИКС: Если земля появилась - просто прячем платформы далеко за экраном (не рециклим!)
+            // ФИКС: Если земля появилась - прячем платформы (игра заканчивается)
             if (this.groundAppeared) {
                 platform.y = -10000; // Прячем далеко за экраном
                 platform.setAlpha(0); // Делаем невидимым
                 platform.body.checkCollision.none = true; // Отключаем коллизию
-
-                return; // Пропускаем остальную логику рецикла
+                return; // Пропускаем остальную логику рецикла - игра скоро закончится
             }
             
             // НОВОЕ: Назначаем новый случайный тип платформы
             platform.platformType = this.choosePlatformType();
             
             // НОВОЕ: Устанавливаем текстуру в зависимости от типа
+            // ФИКС: Единый масштаб 1.8x1.5 для синих шаров (консистентно с createPlatforms)
             if (platform.platformType === 'unbreakable') {
                 platform.setTexture('balloon_unbreakable');
-                platform.setScale(50/30, 100/73);
+                platform.setScale(1.8, 1.5);
             } else {
                 platform.setTexture('platform'); // normal и moving используют обычную зеленую текстуру
                 platform.setScale(1, 1); // ФИКС: Сбрасываем масштаб для нормальных платформ
@@ -4652,17 +4650,13 @@ class GameScene extends Phaser.Scene {
             platform.body.checkCollision.none = false; // Включаем коллизии обратно
             platform.setAlpha(1); // Восстанавливаем полную непрозрачность
             
-            platform.x = Phaser.Math.Between(0, CONSTS.WIDTH);
+            // ФИКС #7: Шарики появляются с отступом от краёв (не на x=0 или x=WIDTH)
+            platform.x = Phaser.Math.Between(80, CONSTS.WIDTH - 80);
             const randomGap = Phaser.Math.Between(200, 280);
             
-            // ФИКС: Если земля появилась - размещаем платформы ВЫШЕ игрока (не используем minPlatformY!)
-            if (this.groundAppeared) {
-                // Размещаем платформу выше игрока на случайном расстоянии
-                platform.y = this.player.y - 800 - Phaser.Math.Between(0, 400); // Выше игрока на 800-1200px
-            } else {
-                // Обычная логика - используем minPlatformY
-                platform.y = this.minPlatformY - randomGap;
-            }
+            // Обычная логика размещения - используем minPlatformY
+            // (groundAppeared обрабатывается выше с return)
+            platform.y = this.minPlatformY - randomGap;
             
             // НОВОЕ: Настройка для движущихся платформ
             if (platform.platformType === 'moving') {
